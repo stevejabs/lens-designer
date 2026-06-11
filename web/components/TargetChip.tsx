@@ -43,13 +43,12 @@ export function TargetChip({ state, attach }: Props) {
   }
 
   function handlePick(t: TargetSummary) {
-    if (t.hasMarker) {
-      // Sandbox — straight attach, no dialog.
-      attach.attachTo(t.port, 'sandbox');
-      return;
-    }
-    // Attached mode — need an assetsDir. Seed the name from the scanned
-    // project name (the user can override it).
+    // Every project attaches in attached mode (needs an assetsDir). The
+    // legacy in-tree sandbox (the only thing that ever had the
+    // ActiveComponent surface sandbox-mode requires) is gone — projects
+    // created from the sandbox template still carry the
+    // __LENS_DESIGNER_SANDBOX__ marker, and routing them to sandbox mode
+    // failed with "no scene object named ActiveComponent".
     setAttachDialog({ open: true, target: t, assetsDir: '', label: t.projectName ?? '' });
     attach.closePicker();
   }
@@ -208,7 +207,7 @@ function PickerDropdown({ picker, activePort, onPick, onClose, onRescan }: Picke
               />
               <span className="flex flex-col min-w-0">
                 <span className="text-[13px] text-text-primary font-medium flex items-center gap-1.5">
-                  {t.hasMarker ? 'sandbox' : `port ${t.port}`}
+                  {`port ${t.port}`}
                   {t.hasMarker && (
                     <span className="px-1 py-px text-[9px] font-bold uppercase tracking-wider text-accent-400 bg-accent-500/15 rounded">
                       Sandbox

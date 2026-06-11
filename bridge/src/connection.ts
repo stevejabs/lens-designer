@@ -382,96 +382,21 @@ export class ConnectionManager {
    * trips. `assertSandbox` alone is enough to confirm liveness.
    */
   private async autoAttachCheck(): Promise<void> {
-    // The user explicitly picked a target — respect it. The auto-attach poll
-    // exists only to discover + hold the sandbox; once a target is explicitly
-    // chosen, re-resolving here would switch the session back to the
-    // auto-discovered sandbox (the "select 50048 → flips to sandbox" bug).
-    // Leave the session untouched; an explicit target's disconnects surface
-    // through apply errors rather than this poll. Cleared on detach().
-    if (this.explicit && this.session.status === 'attached') return;
-
-    const prev = this.session;
-    let next: AttachSession;
-    try {
-      const current = this.session.target;
-      const liveCfg = await resolveConfig();
-      if (
-        prev.status === 'attached' &&
-        current &&
-        current.config.url === liveCfg.url
-      ) {
-        await assertSandbox(current.client);
-        next = prev; // unchanged
-      } else {
-        // Detach from a previous target before setting up the new one so
-        // the active scope reflects exactly what's connected.
-        setActiveScope(null);
-        const client = new McpClient(liveCfg);
-        await client.initialize();
-        await assertSandbox(client);
-
-        // autoAttachCheck only ever attaches the sandbox-marked
-        // instance. The sandbox repo (stevejabs/spectacles-sandbox)
-        // ships LensDesigner.lspkg pre-loaded in Assets/, so the
-        // package is already present + visible to LS when the project
-        // opens — installing via MCP InstallLensStudioPackage here
-        // would either duplicate (UUID conflict) or fall into the
-        // Locked-install path that doesn't materialize source files
-        // the way drag-into-Assets does. Attach mode (for user
-        // projects that DON'T ship the lspkg) still installs via
-        // ensureLensDesignerPackInstalled.
-
-        const port = portFromUrl(liveCfg.url);
-        const target = await buildSandboxTarget(client, liveCfg, port);
-        // Seed the scoped-apply guard from the current edit-surface subtree.
-        await activateScopeForTarget(client, target);
-        // Reset applier caches — LS may have reassigned UUIDs across a restart.
-        resetApplierCaches();
-        next = { status: 'attached', target, reason: null };
-      }
-      // Success path — reset the transient-failure counter.
-      this.consecutiveFailures = 0;
-    } catch (err) {
-      const reason =
-        err instanceof NotSandboxError
-          ? 'sandbox marker not found in any running LS instance'
-          : (err as Error).message;
-
-      // Tolerate transient failures while we WERE attached. Heavy apply
-      // traffic can make a single `assertSandbox` time out / 503 even
-      // though the sandbox is fine. Don't broadcast `sandbox.down` to the
-      // web on a single blip — the next poll usually recovers, and
-      // declaring the session down here would trigger the web's
-      // reconnect-and-resync (doubling the in-flight apply).
-      this.consecutiveFailures += 1;
-      if (
-        prev.status === 'attached' &&
-        this.consecutiveFailures < ConnectionManager.MAX_TRANSIENT_FAILURES
-      ) {
-        process.stderr.write(
-          `bridge: transient connection check failure ${this.consecutiveFailures}/${ConnectionManager.MAX_TRANSIENT_FAILURES} — ${reason}\n`,
-        );
-        return; // session unchanged; don't emit
-      }
-
-      // An explicit attach may have landed while this check was in flight
-      // (onConnect's recheck races target.attach). Tearing down here would
-      // null the fresh scope and broadcast a spurious sandbox.down — bail
-      // and leave the explicit session alone.
-      if (this.explicit && this.session.status === 'attached') return;
-      setActiveScope(null);
-      next = { status: 'idle', target: null, reason };
+    // Liveness-only. The legacy behavior here auto-attached the in-tree
+    // sandbox by scanning for the __LENS_DESIGNER_SANDBOX__ marker — but the
+    // in-tree sandbox (the only project with the ActiveComponent surface
+    // sandbox mode requires) no longer exists, while projects CREATED from
+    // the sandbox template still carry the marker. The scan therefore kept
+    // "finding" real projects, attempting sandbox attach, and failing with
+    // "no scene object named ActiveComponent" (2026-06-11). Sessions are now
+    // explicit-attach only; this poll just keeps an idle session labeled.
+    if (this.session.status === 'attached') return;
+    if (this.session.status === 'detached') return; // stay quiet post-detach
+    const reason = 'no project attached — use Connect… to pick a Lens Studio instance';
+    if (this.session.status !== 'idle' || this.session.reason !== reason) {
+      this.session = { status: 'idle', target: null, reason };
+      this.emit(this.session);
     }
-
-    // Same in-flight race on the success path: don't clobber an explicit
-    // session with an auto-discovered sandbox that resolved concurrently.
-    if (this.explicit && this.session.status === 'attached' && this.session !== prev) return;
-
-    const changed =
-      next.status !== prev.status ||
-      next.target?.config.url !== prev.target?.config.url;
-    this.session = next;
-    if (changed) this.emit(next);
   }
 
   private emit(s: AttachSession): void {

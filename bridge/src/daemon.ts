@@ -100,9 +100,7 @@ async function main(): Promise<void> {
   } else {
     process.stdout.write(
       `bridge: not connected yet — ${initial.reason}\n` +
-        `       open your sandbox project in Lens Studio (Create sandbox in the\n` +
-        `       app downloads it from github.com/stevejabs/spectacles-sandbox);\n` +
-        `       the daemon will pick it up on the next 5s poll.\n`,
+        `       use Connect… in the app to attach a Lens Studio project.\n`,
     );
   }
 
