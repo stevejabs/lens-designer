@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist",
+    "noEmit": true,
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "target": "ES2022",
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["index.d.ts", "index.js"]
+}

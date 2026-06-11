@@ -1,0 +1,97 @@
+# electron-builder configuration for Lens Designer.
+#
+# v1.0: macOS only. The win: and linux: blocks are present-but-
+# commented from day one per TD-15 rule 6 — adding a platform means
+# uncommenting, never inventing structure.
+#
+# Build via `pnpm --filter @lens-designer/desktop package`. Signing +
+# notarization happen when the appropriate environment variables are
+# present (see scripts/notarize.ts and build/entitlements.mac.plist).
+
+appId: com.jollymediagroup.lens-designer
+productName: Lens Designer
+copyright: Copyright © 2026 Jolly Media Group · MIT
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - dist/**
+  - package.json
+  - "!**/{.DS_Store,.git,*.map,node_modules}"
+
+extraResources:
+  # LensDesigner.lspkg ships outside app.asar so MCP's
+  # InstallLensStudioPackage can hand LS an absolute filesystem path
+  # (LS cannot read files inside an asar archive). Sourced from the
+  # build script's staged copy under dist/assets/.
+  - from: dist/assets/LensDesigner.lspkg
+    to: LensDesigner.lspkg
+
+asar: true
+asarUnpack:
+  # Native modules (capture-addon's .node binary) MUST live outside
+  # the asar — Node can't dlopen() inside it.
+  - "**/*.node"
+  - "**/@lens-designer/capture-addon/**"
+
+# ============================================================
+# macOS — v1.0 active
+# ============================================================
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false  # set true once APPLE_ID + APP_PASSWORD are wired
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  extendInfo:
+    NSCameraUsageDescription: Lens Designer does not access the camera.
+    NSMicrophoneUsageDescription: Lens Designer does not access the microphone.
+    LSMinimumSystemVersion: '12.3'  # ScreenCaptureKit requires 12.3+
+
+dmg:
+  title: Lens Designer ${version}
+  iconSize: 96
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
+
+# ============================================================
+# Windows — DEFERRED to v1.1 (TD-16). Structure locked.
+# ============================================================
+# win:
+#   icon: build/icon.ico
+#   target:
+#     - target: nsis
+#       arch: [x64]
+# nsis:
+#   oneClick: false
+#   perMachine: false
+#   allowToChangeInstallationDirectory: true
+
+# ============================================================
+# Linux — DEFERRED until Lens Studio supports Linux. Structure locked.
+# ============================================================
+# linux:
+#   category: Development
+#   target:
+#     - target: AppImage
+#       arch: [x64]
+#     - target: deb
+#       arch: [x64]

@@ -1,0 +1,18 @@
+# Anchors pnpm to this directory so it doesn't walk up to the worktree root
+# (the worktree root has npm workspaces and would otherwise be picked up as
+# the pnpm project root, polluting it with pnpm-lock.yaml + pnpm-workspace.yaml).
+packages:
+  - '.'
+  - 'bridge'
+  - 'web'
+  - 'e2e'
+  - 'capture-addon'
+  - 'desktop'
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  '@napi-rs/cli': true
+  electron: true
+  esbuild-darwin-arm64: true
+  electron-winstaller: false

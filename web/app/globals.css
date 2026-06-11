@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Mirror docs/design/design-system.md so non-Tailwind consumers
+     (e.g., inline SVG attrs) can reference var(--accent-400). */
+  --bg-0: #08080a;
+  --bg-1: #131316;
+  --bg-2: #1c1c20;
+  --bg-3: #26262b;
+  --bg-4: #2e2e34;
+  --bg-canvas: #0e0e11;
+  --bg-canvas-checker: #1a1a1e;
+  --border-subtle: #2e2e34;
+  --border-default: #3a3a42;
+  --border-strong: #4a4a54;
+  --text-primary: #e8e8eb;
+  --text-secondary: #a3a3a9;
+  --text-tertiary: #6b6b73;
+  --text-inverse: #0a0a0c;
+  --accent-400: #38bdf8;
+  --accent-500: #0ea5e9;
+  --accent-600: #0284c7;
+  --accent-glow: rgba(56, 189, 248, 0.15);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #38bdf8;
+}
+
+html,
+body,
+#__next {
+  height: 100%;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--text-primary);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 18px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Numbers in the inspector + status text use mono so digits don't jitter. */
+.font-num {
+  font-family: 'SF Mono', Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Preview pane — bulletproof centering. !important locks us against
+   any other rule sneaking in (Tailwind preflight, browser quirks,
+   cached HMR styles). */
+.lens-preview-stage {
+  position: relative !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  background: var(--bg-canvas) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.lens-preview-image {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: static !important;
+}

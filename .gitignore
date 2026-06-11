@@ -1,0 +1,28 @@
+# deps / builds
+node_modules/
+dist/
+bridge/dist/
+desktop/dist/
+web/.next/
+web/out/
+web/next-env.d.ts
+web/.eslintcache
+*.tsbuildinfo
+*.log
+
+# runtime artifacts (window captures, export bundles, e2e output)
+captures/
+*.png
+exports/
+e2e/playwright-report/
+e2e/test-results/
+
+# editor / env
+.vscode/
+.idea/
+.env
+.env.local
+.DS_Store
+
+# Local agent notes — not published (validate before ever tracking)
+CLAUDE.md

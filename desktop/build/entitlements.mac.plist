@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Required for notarization with hardened runtime. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <!-- V8/JIT writes executable memory pages. -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!-- App downloads the sandbox zip + talks to LS MCP over loopback. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <!-- Bridge binds WS + HTTP on loopback. Required even though we
+       only listen on 127.0.0.1. -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+  <!--
+    NO com.apple.security.app-sandbox — Lens Designer needs to read
+    user-chosen directories (sandbox path, attach-mode .esproj) and
+    spawn the bridge utilityProcess. The App Sandbox would block both.
+  -->
+</dict>
+</plist>

@@ -1,0 +1,40 @@
+{
+  "name": "@lens-designer/capture-addon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-platform native window capture + port-to-pid for Lens Designer.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "napi": {
+    "name": "capture-addon",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release --js binding.js --dts binding.d.ts",
+    "build:debug": "napi build --platform --js binding.js --dts binding.d.ts",
+    "test": "vitest run",
+    "test:rust": "cargo test --release",
+    "test:rust:debug": "cargo test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

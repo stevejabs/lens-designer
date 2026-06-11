@@ -1,0 +1,36 @@
+{
+  "name": "@lens-designer/bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Long-lived WS + HTTP bridge between the web designer and Lens Studio.",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./protocol": "./src/protocol.ts",
+    "./manifests": "./src/manifests/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude 'test/integration/**'",
+    "test:int": "vitest run test/integration",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@lens-designer/capture-addon": "workspace:*",
+    "ws": "^8.18.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "fast-glob": "^3.3.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
