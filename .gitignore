@@ -26,3 +26,6 @@ e2e/test-results/
 
 # Local agent notes — not published (validate before ever tracking)
 CLAUDE.md
+
+# Internal planning/tutorial docs — local-only, not published
+docs/
