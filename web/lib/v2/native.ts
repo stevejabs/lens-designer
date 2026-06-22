@@ -90,6 +90,7 @@ export interface LDApi {
       ok: boolean;
     }>;
     cancel(): Promise<void>;
+    cli(): Promise<string>;
     onEvent(handler: (e: LDAgentEvent) => void): () => void;
   };
 }

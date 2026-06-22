@@ -37,6 +37,7 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
   ipcMain.handle('ld:connection:reconnect', () => {
     orchestrator.reconnect();
   });
+  ipcMain.handle('ld:agent:cli', () => orchestrator.getAgentCli());
 
   // ── Project ──
   ipcMain.handle('ld:project:dir', async () => {

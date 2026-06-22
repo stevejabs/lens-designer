@@ -35,6 +35,14 @@ export interface AgentRunHandle {
   cancel(): void;
 }
 
+/** CLI-agnostic agent interface — Claude and Codex adapters both implement it. */
+export interface AgentAdapter {
+  run(opts: RunOptions): AgentRunHandle;
+  on(event: 'event', listener: (e: AgentEvent) => void): this;
+  off(event: 'event', listener: (e: AgentEvent) => void): this;
+  readonly cliName: string;
+}
+
 export interface AgentRunnerEvents {
   event: (e: AgentEvent) => void;
 }
@@ -63,7 +71,8 @@ function resolvedEnv(): NodeJS.ProcessEnv {
   return { ...process.env, PATH: merged };
 }
 
-export class AgentRunner extends EventEmitter {
+export class AgentRunner extends EventEmitter implements AgentAdapter {
+  readonly cliName = 'claude';
   private readonly bin: string;
 
   constructor(bin?: string) {

@@ -6,6 +6,7 @@ import { cn } from '@/lib/v2/cn';
 import { MOCK_THREAD } from '@/lib/v2/mock-data';
 import { useAgentThread } from '@/lib/v2/hooks';
 import { useUiStore } from '@/lib/v2/ui-store';
+import { getLd } from '@/lib/v2/native';
 import type { AgentMessage } from '@/lib/v2/types';
 import { Pill } from './ui/Primitives';
 
@@ -65,6 +66,14 @@ export function AgentPanel() {
   const { messages, running, send, reset, electron } = useAgentThread(MOCK_THREAD);
   const cliConnected = electron;
 
+  // Which CLI the generative channel uses (Claude Code / Codex).
+  const [cliName, setCliName] = useState('Claude Code');
+  useEffect(() => {
+    void getLd()
+      ?.agent.cli()
+      .then((n) => setCliName(n === 'codex' ? 'Codex' : 'Claude Code'));
+  }, []);
+
   // Consume a one-shot prefill pushed from elsewhere (e.g. New Asset → prompt).
   const agentPrefill = useUiStore((s) => s.agentPrefill);
   const clearAgentPrefill = useUiStore((s) => s.clearAgentPrefill);
@@ -114,7 +123,7 @@ export function AgentPanel() {
         <div className="flex items-center gap-2">
           <Pill tone={cliConnected ? 'success' : 'neutral'}>
             <Terminal className="w-3 h-3" />
-            Claude Code
+            {cliName}
           </Pill>
           <button
             onClick={() => newAgentThread()}

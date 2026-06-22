@@ -62,9 +62,15 @@ async function main(): Promise<void> {
   await win.waitForTimeout(4000);
   await win.screenshot({ path: '/tmp/ld-electron-preview.png' });
 
-  // 4. Back to Assets.
+  // 4. Back to Assets; select the first card and confirm the viewer renders.
   await win.locator('[title="Assets"]').click();
   await win.waitForTimeout(1500);
+  // Click the actual mesh card by name (GhostonGlowCloud) to render the GLB.
+  await win.locator('button', { hasText: 'GhostonGlowCloud' }).first().click().catch(() => {});
+  await win.waitForTimeout(5000);
+  const canvases = await win.locator('canvas').count();
+  const audios = await win.locator('audio').count();
+  console.log('after selecting mesh → canvas elements:', canvases, '| audio elements:', audios);
   await win.screenshot({ path: '/tmp/ld-electron-assets.png' });
 
   console.log('screenshots: /tmp/ld-electron-{designer,preview,assets}.png');

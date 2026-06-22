@@ -7,7 +7,8 @@
 
 import { EventEmitter } from 'node:events';
 import { LsConnection, type ConnState } from './ls-connection.js';
-import { AgentRunner, type AgentEvent } from './agent-runner.js';
+import type { AgentAdapter, AgentEvent } from './agent-runner.js';
+import { createAgentAdapter } from './agent-factory.js';
 
 export interface AgentTurnRequest {
   prompt: string;
@@ -22,7 +23,7 @@ export interface OrchestratorEvents {
 
 export class Orchestrator extends EventEmitter {
   readonly connection = new LsConnection();
-  private readonly agent = new AgentRunner();
+  private readonly agent: AgentAdapter = createAgentAdapter();
   /** Promise chain enforcing single-writer ordering across the two channels. */
   private queue: Promise<unknown> = Promise.resolve();
   private agentBusy = false;
@@ -45,6 +46,11 @@ export class Orchestrator extends EventEmitter {
 
   getConnection(): ConnState {
     return this.connection.getState();
+  }
+
+  /** Which generative CLI is active ('claude' | 'codex'). */
+  getAgentCli(): string {
+    return this.agent.cliName;
   }
 
   reconnect(): void {

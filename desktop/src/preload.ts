@@ -219,6 +219,7 @@ export interface LDApi {
       ok: boolean;
     }>;
     cancel(): Promise<void>;
+    cli(): Promise<string>;
     onEvent(handler: (e: LDAgentEvent) => void): () => void;
   };
 }
@@ -266,6 +267,7 @@ const ld: LDApi = {
     run: (req) =>
       ipcRenderer.invoke('ld:agent:run', req) as Promise<{ sessionId: string | null; ok: boolean }>,
     cancel: () => ipcRenderer.invoke('ld:agent:cancel') as Promise<void>,
+    cli: () => ipcRenderer.invoke('ld:agent:cli') as Promise<string>,
     onEvent: (handler) => {
       const listener = (_e: Electron.IpcRendererEvent, ev: LDAgentEvent): void => handler(ev);
       ipcRenderer.on('ld:agent-event', listener);
