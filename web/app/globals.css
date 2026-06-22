@@ -2,31 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Lens Designer v2 — design system.
+  A premium, modern dark surface tuned for a spatial / AR authoring tool:
+  deep cool-tinted backgrounds, layered elevation, fine hairline borders,
+  an electric cyan→violet accent, soft glows, and crisp Inter typography.
+*/
+
 :root {
-  /* Mirror docs/design/design-system.md so non-Tailwind consumers
-     (e.g., inline SVG attrs) can reference var(--accent-400). */
-  --bg-0: #08080a;
-  --bg-1: #131316;
-  --bg-2: #1c1c20;
-  --bg-3: #26262b;
-  --bg-4: #2e2e34;
-  --bg-canvas: #0e0e11;
-  --bg-canvas-checker: #1a1a1e;
-  --border-subtle: #2e2e34;
-  --border-default: #3a3a42;
-  --border-strong: #4a4a54;
-  --text-primary: #e8e8eb;
-  --text-secondary: #a3a3a9;
-  --text-tertiary: #6b6b73;
-  --text-inverse: #0a0a0c;
-  --accent-400: #38bdf8;
-  --accent-500: #0ea5e9;
-  --accent-600: #0284c7;
-  --accent-glow: rgba(56, 189, 248, 0.15);
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  /* ─ Surfaces (cool near-black, layered by elevation) ─ */
+  --bg-base: #07080b;        /* app backdrop, behind everything */
+  --bg-0: #0b0c10;           /* primary panel */
+  --bg-1: #101218;           /* raised panel */
+  --bg-2: #161922;           /* card / input */
+  --bg-3: #1d212c;           /* hover / control */
+  --bg-4: #262b38;           /* active / strong control */
+  --bg-canvas: #08090d;
+  --bg-glass: rgba(18, 21, 29, 0.72);
+
+  /* ─ Borders (hairline → strong) ─ */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-default: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  /* ─ Text ─ */
+  --text-primary: #f0f1f4;
+  --text-secondary: #9ea3b0;
+  --text-tertiary: #62677a;
+  --text-inverse: #07080b;
+
+  /* ─ Accent: electric cyan with a violet partner for gradients/glow ─ */
+  --accent-300: #67e8f9;
+  --accent-400: #22d3ee;
+  --accent-500: #06b6d4;
+  --accent-600: #0891b2;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --accent-grad: linear-gradient(135deg, #22d3ee 0%, #818cf8 55%, #a78bfa 100%);
+  --accent-glow: rgba(34, 211, 238, 0.16);
+  --violet-glow: rgba(139, 92, 246, 0.14);
+
+  /* ─ Status ─ */
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
   --info: #38bdf8;
+
+  /* ─ Shadows / elevation ─ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 0 0 1px rgba(34, 211, 238, 0.25), 0 0 24px -4px var(--accent-glow);
+
+  /* ─ Radii ─ */
+  --r-sm: 6px;
+  --r-md: 9px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html,
@@ -36,43 +72,133 @@ body,
 }
 
 body {
-  background: var(--bg-0);
+  margin: 0;
+  background: var(--bg-base);
   color: var(--text-primary);
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
-  line-height: 18px;
+  line-height: 1.45;
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
 }
 
-/* Numbers in the inspector + status text use mono so digits don't jitter. */
+/* Tabular, non-jittering numerals for inspector fields + telemetry. */
 .font-num {
-  font-family: 'SF Mono', Monaco, Consolas, 'Liberation Mono', monospace;
+  font-family: 'SF Mono', 'JetBrains Mono', Monaco, Consolas, monospace;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 
-/* Preview pane — bulletproof centering. !important locks us against
-   any other rule sneaking in (Tailwind preflight, browser quirks,
-   cached HMR styles). */
-.lens-preview-stage {
-  position: relative !important;
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  min-width: 0 !important;
-  background: var(--bg-canvas) !important;
-  overflow: hidden !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+/* ─ Custom scrollbars: thin, unobtrusive, themed ─ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
-.lens-preview-image {
-  max-width: 100% !important;
-  max-height: 100% !important;
-  width: auto !important;
-  height: auto !important;
-  object-fit: contain !important;
-  display: block !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  position: static !important;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
+::-webkit-scrollbar-thumb {
+  background: var(--bg-3);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-4);
+  background-clip: content-box;
+}
+
+/* ─ Focus ring ─ */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-0), 0 0 0 3.5px var(--accent-500);
+}
+
+/* ─ Selection ─ */
+::selection {
+  background: rgba(34, 211, 238, 0.28);
+  color: #fff;
+}
+
+/* ─ Reusable surface utilities ─ */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.accent-text {
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.accent-bg {
+  background: var(--accent-grad);
+}
+
+.glow-ring {
+  box-shadow: var(--shadow-glow);
+}
+
+/* Subtle dotted canvas backdrop for the design surface. */
+.canvas-dots {
+  background-color: var(--bg-canvas);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -1px -1px;
+}
+
+/* App backdrop with a faint aurora wash so the dark UI has depth. */
+.app-aurora {
+  position: relative;
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(34, 211, 238, 0.07), transparent 60%),
+    radial-gradient(1000px 700px at 110% 10%, rgba(139, 92, 246, 0.07), transparent 55%),
+    var(--bg-base);
+}
+
+/* ─ Animations ─ */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-in { animation: fade-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-scale-in { animation: scale-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Skeleton shimmer for loading states. */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-2) 25%,
+    var(--bg-3) 37%,
+    var(--bg-2) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* macOS frameless drag region. */
+.drag-region { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }

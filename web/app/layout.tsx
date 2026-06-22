@@ -3,21 +3,20 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Lens Designer',
-  description: 'WYSIWYG editor for Spectacles UI primitives.',
+  description: 'Visual + agentic authoring for SPECS AR — on top of Lens Studio 5.22 and CLAD.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
-        {/* LS-bundled font matches we ship: Libre Baskerville, Cutive
-            Mono, Merriweather. Loaded from Google Fonts so the canvas
-            SVG renders the same typeface the LS Spectacles Preview
-            will render. */}
+        {/* Inter powers the UI chrome. Loaded via <link> (runtime) rather
+            than next/font so a static export never depends on a build-time
+            fetch. Falls back to the system stack if offline. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Cutive+Mono&family=Merriweather:wght@300;400;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>

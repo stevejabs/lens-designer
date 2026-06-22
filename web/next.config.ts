@@ -13,6 +13,9 @@ const config: NextConfig = {
   images: { unoptimized: true },
   // The bridge package ships .ts source; Next compiles it on demand.
   transpilePackages: ['@lens-designer/bridge'],
+  // Allow loading the dev server from the containerized screenshot browser
+  // (host.docker.internal). Dev-only; the packaged app serves from app://.
+  allowedDevOrigins: ['host.docker.internal'],
 };
 
 export default config;
