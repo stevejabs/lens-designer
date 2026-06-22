@@ -170,7 +170,15 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
   const submitRefine = (): void => {
     const p = refinePrompt.trim();
     if (!p || !asset) return;
-    refineArtifact({ path: asset.id, id: asset.id, name: asset.name, kind: 'asset' }, p);
+    const kindWord =
+      asset.kind === 'mesh' ? '3D mesh asset' : asset.kind === 'music' ? 'music track' : 'sound effect';
+    // Hand the agent the exact file so it doesn't search the project for it.
+    const prompt =
+      `Modify the existing ${kindWord} at this exact file path: ${asset.id}\n` +
+      `Requested change: ${p}\n` +
+      `Regenerate/edit it and overwrite that same file in place — do not create a new asset or a new file path. ` +
+      `It is already in the project; operate on it directly.`;
+    refineArtifact({ path: asset.id, id: asset.id, name: asset.name, kind: 'asset' }, prompt);
     setRefinePrompt('');
   };
 

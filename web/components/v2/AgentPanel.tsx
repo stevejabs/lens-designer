@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, ArrowUp, Wrench, Check, Loader2, Terminal, Plus } from 'lucide-react';
+import { Sparkles, ArrowUp, Wrench, Check, Loader2, Terminal, Plus, Square } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
 import { MOCK_THREAD } from '@/lib/v2/mock-data';
 import { useAgentThread } from '@/lib/v2/hooks';
@@ -63,7 +63,7 @@ const SUGGESTIONS = [
 
 export function AgentPanel() {
   const [draft, setDraft] = useState('');
-  const { messages, running, send, reset, electron } = useAgentThread(MOCK_THREAD);
+  const { messages, running, send, cancel, reset, electron } = useAgentThread(MOCK_THREAD);
   const cliConnected = electron;
 
   // Which CLI the generative channel uses (Claude Code / Codex).
@@ -150,6 +150,12 @@ export function AgentPanel() {
           <div className="flex items-center gap-2 pl-1 text-xs text-text-tertiary">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-400" />
             Working…
+            <button
+              onClick={cancel}
+              className="ml-1 flex items-center gap-1 px-1.5 h-5 rounded text-2xs text-danger border border-[rgba(248,113,113,0.3)] hover:bg-[rgba(248,113,113,0.1)] transition-colors"
+            >
+              <Square className="w-2.5 h-2.5 fill-current" /> Stop
+            </button>
           </div>
         )}
       </div>
@@ -192,18 +198,28 @@ export function AgentPanel() {
             <span className="text-2xs text-text-tertiary">
               {cliConnected ? 'Routes to CLAD via your CLI · ⌘↵' : 'Open in the desktop app to run'}
             </span>
-            <button
-              onClick={submit}
-              disabled={!draft.trim() || running}
-              className={cn(
-                'flex items-center justify-center w-7 h-7 rounded-md transition-all duration-150 ease-spring',
-                draft.trim() && !running
-                  ? 'accent-bg text-text-inverse hover:brightness-110'
-                  : 'bg-bg-3 text-text-tertiary',
-              )}
-            >
-              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
-            </button>
+            {running ? (
+              <button
+                onClick={cancel}
+                title="Stop the agent"
+                className="flex items-center justify-center w-7 h-7 rounded-md bg-danger text-white hover:brightness-110 transition-all"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+              </button>
+            ) : (
+              <button
+                onClick={submit}
+                disabled={!draft.trim()}
+                className={cn(
+                  'flex items-center justify-center w-7 h-7 rounded-md transition-all duration-150 ease-spring',
+                  draft.trim()
+                    ? 'accent-bg text-text-inverse hover:brightness-110'
+                    : 'bg-bg-3 text-text-tertiary',
+                )}
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>

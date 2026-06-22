@@ -376,8 +376,26 @@ export function useAgentThread(initial: AgentMessage[] = []) {
   const clearQueuedPrompt = useUiStore((s) => s.clearQueuedPrompt);
   useEffect(() => {
     if (!queuedPrompt) return;
+    const prompt = queuedPrompt;
     clearQueuedPrompt();
-    sendRef.current(queuedPrompt);
+    const ld = getLd();
+    const artifact = artifactRef.current;
+    void (async () => {
+      // Reload THIS artifact's saved thread (so refine resumes its real
+      // conversation + session, not whatever was open), then send.
+      if (ld && artifact) {
+        const ctx = await ld.context.get(artifact.path);
+        sessionRef.current = ctx?.sessionId ?? null;
+        const seeded: AgentMessage[] = ctx
+          ? ctx.promptHistory.map((p, i) => ({ id: `seed-${i}`, role: 'user' as const, text: p }))
+          : [];
+        if (ctx?.distilledSummary) {
+          seeded.push({ id: 'seed-summary', role: 'assistant', text: ctx.distilledSummary, status: 'done' });
+        }
+        setMessages(seeded);
+      }
+      sendRef.current(prompt);
+    })();
   }, [queuedPrompt, clearQueuedPrompt]);
 
   const cancel = useCallback(() => {

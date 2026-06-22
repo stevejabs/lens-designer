@@ -104,6 +104,8 @@ async function main(): Promise<void> {
   await win.waitForTimeout(2500);
   const agentText = await win.locator('aside:has-text("Agent")').innerText().catch(() => '');
   console.log('refine routed to agent (marker in thread):', /zztest-refine-marker/.test(agentText));
+  const stopVisible = (await win.locator('button:has-text("Stop")').count()) > 0;
+  console.log('stop control visible during run:', stopVisible);
 
   console.log('screenshots: /tmp/ld-electron-{designer,preview,assets}.png');
   void viewsText;
