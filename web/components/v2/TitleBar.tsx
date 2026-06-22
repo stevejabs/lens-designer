@@ -3,32 +3,43 @@
 import { ChevronDown, Sparkles, PanelRight, Cable } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { cn } from '@/lib/v2/cn';
+import { useConnection } from '@/lib/v2/hooks';
+import { getLd } from '@/lib/v2/native';
 import { Logo } from './ui/Logo';
 import { IconButton, Pill } from './ui/Primitives';
-import type { ConnectionState } from '@/lib/v2/types';
-
-const CONN_LABEL: Record<ConnectionState, string> = {
-  connected: 'Lens Studio 5.22',
-  connecting: 'Connecting…',
-  disconnected: 'Not connected',
-};
 
 function ConnectionChip() {
-  const connection = useUiStore((s) => s.connection);
+  const conn = useConnection();
   const dot =
-    connection === 'connected'
+    conn.kind === 'connected'
       ? 'bg-success'
-      : connection === 'connecting'
+      : conn.kind === 'connecting'
         ? 'bg-warning'
         : 'bg-text-tertiary';
+  const label =
+    conn.kind === 'connected'
+      ? `${conn.server} ${conn.version}`
+      : conn.kind === 'connecting'
+        ? 'Connecting…'
+        : 'Not connected';
+
   return (
-    <button className="no-drag group flex items-center gap-2 h-7 pl-2 pr-2.5 rounded-md border border-subtle bg-bg-2 hover:bg-bg-3 hover:border-default transition-colors">
+    <button
+      onClick={() => void getLd()?.connection.reconnect()}
+      title={conn.kind === 'disconnected' && conn.reason ? conn.reason : 'Lens Studio connection'}
+      className="no-drag group flex items-center gap-2 h-7 pl-2 pr-2.5 rounded-md border border-subtle bg-bg-2 hover:bg-bg-3 hover:border-default transition-colors"
+    >
       <Cable className="w-3.5 h-3.5 text-text-tertiary" />
       <span className="flex items-center gap-1.5">
-        <span className={cn('w-1.5 h-1.5 rounded-full', dot)} style={{ animation: connection === 'connecting' ? 'pulse-dot 1.2s ease-in-out infinite' : undefined }} />
-        <span className="text-xs text-text-secondary">{CONN_LABEL[connection]}</span>
+        <span
+          className={cn('w-1.5 h-1.5 rounded-full', dot)}
+          style={{ animation: conn.kind === 'connecting' ? 'pulse-dot 1.2s ease-in-out infinite' : undefined }}
+        />
+        <span className="text-xs text-text-secondary max-w-[160px] truncate">{label}</span>
       </span>
-      <span className="font-num text-2xs text-text-tertiary">:50040</span>
+      {conn.kind === 'connected' && (
+        <span className="font-num text-2xs text-text-tertiary">:{conn.port}</span>
+      )}
     </button>
   );
 }

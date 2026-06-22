@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Sparkles, ArrowUp, Wrench, Check, Loader2, Terminal, Plus } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
 import { MOCK_THREAD } from '@/lib/v2/mock-data';
+import { useAgentThread } from '@/lib/v2/hooks';
 import type { AgentMessage } from '@/lib/v2/types';
 import { Pill } from './ui/Primitives';
 
@@ -60,7 +61,15 @@ const SUGGESTIONS = [
 
 export function AgentPanel() {
   const [draft, setDraft] = useState('');
-  const cliConnected = true;
+  const { messages, running, send, electron } = useAgentThread(MOCK_THREAD);
+  const cliConnected = electron;
+
+  const submit = (): void => {
+    const text = draft.trim();
+    if (!text || running) return;
+    setDraft('');
+    void send(text);
+  };
 
   return (
     <aside className="flex flex-col w-[340px] shrink-0 border-l border-subtle bg-bg-0">
@@ -89,9 +98,15 @@ export function AgentPanel() {
           </span>
           <span className="text-2xs text-text-tertiary">· context saved</span>
         </div>
-        {MOCK_THREAD.map((m) => (
+        {messages.map((m) => (
           <MessageRow key={m.id} msg={m} />
         ))}
+        {running && (
+          <div className="flex items-center gap-2 pl-1 text-xs text-text-tertiary">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-400" />
+            Working…
+          </div>
+        )}
       </div>
 
       {/* Suggestions */}
@@ -118,24 +133,31 @@ export function AgentPanel() {
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                submit();
+              }
+            }}
             rows={2}
             placeholder="Describe what to build or change…"
             className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-sm text-text-primary placeholder:text-text-tertiary outline-none"
           />
           <div className="flex items-center justify-between px-2.5 pb-2">
             <span className="text-2xs text-text-tertiary">
-              Routes to CLAD via your CLI
+              {cliConnected ? 'Routes to CLAD via your CLI · ⌘↵' : 'Open in the desktop app to run'}
             </span>
             <button
-              disabled={!draft.trim()}
+              onClick={submit}
+              disabled={!draft.trim() || running}
               className={cn(
                 'flex items-center justify-center w-7 h-7 rounded-md transition-all duration-150 ease-spring',
-                draft.trim()
+                draft.trim() && !running
                   ? 'accent-bg text-text-inverse hover:brightness-110'
                   : 'bg-bg-3 text-text-tertiary',
               )}
             >
-              <ArrowUp className="w-4 h-4" />
+              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
             </button>
           </div>
         </div>
