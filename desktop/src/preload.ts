@@ -144,6 +144,15 @@ export interface LDScannedAsset {
   prompt?: string;
 }
 
+export interface LDScannedView {
+  id: string;
+  name: string;
+  module: string;
+  path: string;
+  origin: 'prompt' | 'wysiwyg';
+  updatedMs: number;
+}
+
 export interface LDApi {
   connection: {
     get(): Promise<LDConnState>;
@@ -158,6 +167,9 @@ export interface LDApi {
   };
   assets: {
     list(): Promise<LDScannedAsset[]>;
+  };
+  views: {
+    list(): Promise<LDScannedView[]>;
   };
   agent: {
     run(req: { prompt: string; resumeSessionId?: string; cwd?: string }): Promise<{
@@ -192,6 +204,9 @@ const ld: LDApi = {
   },
   assets: {
     list: () => ipcRenderer.invoke('ld:assets:list') as Promise<LDScannedAsset[]>,
+  },
+  views: {
+    list: () => ipcRenderer.invoke('ld:views:list') as Promise<LDScannedView[]>,
   },
   agent: {
     run: (req) =>

@@ -13,6 +13,10 @@ interface UiState {
   selectedViewId: string | null;
   /** One-shot prompt text pushed into the Agent composer (e.g. New Asset). */
   agentPrefill: string | null;
+  /** Bumps to signal the Agent panel to start a fresh conversation. */
+  agentResetNonce: number;
+  /** Bumps when an agent run completes, so asset/view lists refresh. */
+  artifactNonce: number;
 
   setMode: (mode: WorkspaceMode) => void;
   setPosture: (posture: Posture) => void;
@@ -23,9 +27,13 @@ interface UiState {
   toggleInspector: () => void;
   selectAsset: (id: string | null) => void;
   selectView: (id: string | null) => void;
-  /** Open the agent panel and seed the composer with `text`. */
-  promptAgent: (text: string) => void;
+  /** Open the agent panel and seed the composer with `text`. `fresh` starts a new thread. */
+  promptAgent: (text: string, fresh?: boolean) => void;
   clearAgentPrefill: () => void;
+  /** Start a fresh agent conversation (clears thread + session). */
+  newAgentThread: () => void;
+  /** Signal that project artifacts likely changed (agent run finished). */
+  bumpArtifacts: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -37,6 +45,8 @@ export const useUiStore = create<UiState>((set) => ({
   selectedAssetId: 'a1',
   selectedViewId: 'v1',
   agentPrefill: null,
+  agentResetNonce: 0,
+  artifactNonce: 0,
 
   setMode: (mode) => set({ mode }),
   setPosture: (posture) => set({ posture }),
@@ -48,6 +58,14 @@ export const useUiStore = create<UiState>((set) => ({
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   selectAsset: (selectedAssetId) => set({ selectedAssetId }),
   selectView: (selectedViewId) => set({ selectedViewId }),
-  promptAgent: (text) => set({ agentPrefill: text, agentOpen: true }),
+  promptAgent: (text, fresh) =>
+    set((s) => ({
+      agentPrefill: text,
+      agentOpen: true,
+      ...(fresh ? { agentResetNonce: s.agentResetNonce + 1 } : {}),
+    })),
   clearAgentPrefill: () => set({ agentPrefill: null }),
+  newAgentThread: () =>
+    set((s) => ({ agentResetNonce: s.agentResetNonce + 1, agentOpen: true })),
+  bumpArtifacts: () => set((s) => ({ artifactNonce: s.artifactNonce + 1 })),
 }));

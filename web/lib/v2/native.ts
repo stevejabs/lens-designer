@@ -27,6 +27,15 @@ export interface LDScannedAsset {
   prompt?: string;
 }
 
+export interface LDScannedView {
+  id: string;
+  name: string;
+  module: string;
+  path: string;
+  origin: 'prompt' | 'wysiwyg';
+  updatedMs: number;
+}
+
 export interface LDApi {
   connection: {
     get(): Promise<LDConnState>;
@@ -36,6 +45,7 @@ export interface LDApi {
   project: { dir(): Promise<string | null> };
   scene: { tools(): Promise<{ count: number; sample: string[]; server: unknown }> };
   assets: { list(): Promise<LDScannedAsset[]> };
+  views: { list(): Promise<LDScannedView[]> };
   agent: {
     run(req: { prompt: string; resumeSessionId?: string; cwd?: string }): Promise<{
       sessionId: string | null;

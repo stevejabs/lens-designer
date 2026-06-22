@@ -1,9 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getLd, type LDConnState, type LDAgentEvent, type LDScannedAsset } from './native';
-import type { AgentMessage, AssetItem } from './types';
-import { MOCK_ASSETS } from './mock-data';
+import {
+  getLd,
+  type LDConnState,
+  type LDAgentEvent,
+  type LDScannedAsset,
+  type LDScannedView,
+} from './native';
+import type { AgentMessage, AssetItem, DesignView } from './types';
+import { MOCK_ASSETS, MOCK_VIEWS } from './mock-data';
+import { useUiStore } from './ui-store';
 
 function relTime(ms: number): string {
   const s = Math.max(1, Math.round((Date.now() - ms) / 1000));
@@ -40,6 +47,8 @@ export function useAssets(): { assets: AssetItem[]; loading: boolean; refresh: (
   const [assets, setAssets] = useState<AssetItem[]>(() => (getLd() ? [] : MOCK_ASSETS));
   const [loading, setLoading] = useState(false);
 
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+
   const refresh = useCallback(() => {
     const ld = getLd();
     if (!ld) return;
@@ -52,9 +61,37 @@ export function useAssets(): { assets: AssetItem[]; loading: boolean; refresh: (
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, artifactNonce]);
 
   return { assets, loading, refresh };
+}
+
+function toDesignView(v: LDScannedView): DesignView {
+  return {
+    id: v.id,
+    name: v.name,
+    module: v.module,
+    origin: v.origin,
+    updated: relTime(v.updatedMs),
+  };
+}
+
+/** Real project views (UIKit modules) in Electron; mock in the browser. */
+export function useViews(): { views: DesignView[]; refresh: () => void } {
+  const [views, setViews] = useState<DesignView[]>(() => (getLd() ? [] : MOCK_VIEWS));
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+
+  const refresh = useCallback(() => {
+    const ld = getLd();
+    if (!ld) return;
+    void ld.views.list().then((list) => setViews(list.map(toDesignView)));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh, artifactNonce]);
+
+  return { views, refresh };
 }
 
 /** Live LS connection state from the desktop shell (disconnected in browser). */
@@ -165,5 +202,13 @@ export function useAgentThread(initial: AgentMessage[] = []) {
     setRunning(false);
   }, []);
 
-  return { messages, running, send, cancel, electron, sessionId: sessionRef.current };
+  /** Start a fresh conversation: clear the thread + drop the resumable session. */
+  const reset = useCallback(() => {
+    void getLd()?.agent.cancel();
+    sessionRef.current = null;
+    setRunning(false);
+    setMessages(getLd() ? [] : []);
+  }, []);
+
+  return { messages, running, send, cancel, reset, electron, sessionId: sessionRef.current };
 }

@@ -12,11 +12,12 @@ import {
   Plus,
   Sparkles,
   FileCode2,
+  RotateCw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { cn } from '@/lib/v2/cn';
-import { MOCK_VIEWS } from '@/lib/v2/mock-data';
+import { useViews } from '@/lib/v2/hooks';
 import { SectionLabel } from '../ui/Primitives';
 
 const PALETTE: { label: string; icon: LucideIcon }[] = [
@@ -34,19 +35,37 @@ const PALETTE: { label: string; icon: LucideIcon }[] = [
 export function DesignerLeft() {
   const selectedViewId = useUiStore((s) => s.selectedViewId);
   const selectView = useUiStore((s) => s.selectView);
+  const promptAgent = useUiStore((s) => s.promptAgent);
+  const { views, refresh } = useViews();
 
   return (
     <div className="flex flex-col w-[220px] shrink-0 border-r border-subtle bg-bg-0">
       {/* Views */}
       <div className="flex items-center justify-between h-11 px-4 border-b border-subtle">
-        <h1 className="text-sm font-semibold text-text-primary">Views</h1>
-        <button className="flex items-center justify-center w-7 h-7 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors" title="New view">
-          <Plus className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-sm font-semibold text-text-primary">Views</h1>
+          <span className="text-2xs text-text-tertiary font-num">{views.length}</span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => refresh()}
+            className="flex items-center justify-center w-7 h-7 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors"
+            title="Refresh from project"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => promptAgent('Build a UI view: ', true)}
+            className="flex items-center justify-center w-7 h-7 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors"
+            title="New view (prompt)"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="px-2 py-2 space-y-0.5">
-        {MOCK_VIEWS.map((v) => {
+        {views.map((v) => {
           const active = v.id === selectedViewId;
           return (
             <button
@@ -63,6 +82,11 @@ export function DesignerLeft() {
             </button>
           );
         })}
+        {views.length === 0 && (
+          <p className="px-2 py-3 text-xs text-text-tertiary">
+            No views yet. Use + to prompt one, or build one on the canvas.
+          </p>
+        )}
       </div>
 
       {/* Palette */}

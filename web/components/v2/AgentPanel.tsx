@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, ArrowUp, Wrench, Check, Loader2, Terminal, Plus } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
 import { MOCK_THREAD } from '@/lib/v2/mock-data';
@@ -62,7 +62,7 @@ const SUGGESTIONS = [
 
 export function AgentPanel() {
   const [draft, setDraft] = useState('');
-  const { messages, running, send, electron } = useAgentThread(MOCK_THREAD);
+  const { messages, running, send, reset, electron } = useAgentThread(MOCK_THREAD);
   const cliConnected = electron;
 
   // Consume a one-shot prefill pushed from elsewhere (e.g. New Asset → prompt).
@@ -74,6 +74,27 @@ export function AgentPanel() {
       clearAgentPrefill();
     }
   }, [agentPrefill, clearAgentPrefill]);
+
+  // Start a fresh conversation when something bumps the reset nonce
+  // (New Asset, the + button). Skip the initial mount value.
+  const resetNonce = useUiStore((s) => s.agentResetNonce);
+  const newAgentThread = useUiStore((s) => s.newAgentThread);
+  const bumpArtifacts = useUiStore((s) => s.bumpArtifacts);
+  const seenNonce = useRef(resetNonce);
+  useEffect(() => {
+    if (resetNonce !== seenNonce.current) {
+      seenNonce.current = resetNonce;
+      reset();
+    }
+  }, [resetNonce, reset]);
+
+  // When a run finishes (running true → false), the agent may have created or
+  // changed assets/views in the project — refresh those lists.
+  const wasRunning = useRef(running);
+  useEffect(() => {
+    if (wasRunning.current && !running) bumpArtifacts();
+    wasRunning.current = running;
+  }, [running, bumpArtifacts]);
 
   const submit = (): void => {
     const text = draft.trim();
@@ -95,7 +116,11 @@ export function AgentPanel() {
             <Terminal className="w-3 h-3" />
             Claude Code
           </Pill>
-          <button className="flex items-center justify-center w-7 h-7 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors" title="New thread">
+          <button
+            onClick={() => newAgentThread()}
+            className="flex items-center justify-center w-7 h-7 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors"
+            title="New thread"
+          >
             <Plus className="w-4 h-4" />
           </button>
         </div>

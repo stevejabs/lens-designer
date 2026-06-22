@@ -45,7 +45,7 @@ function NewAssetMenu() {
                 key={o.kind}
                 onClick={() => {
                   setOpen(false);
-                  promptAgent(o.template);
+                  promptAgent(o.template, true);
                 }}
                 className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-text-secondary hover:text-text-primary hover:bg-bg-3 transition-colors"
               >
