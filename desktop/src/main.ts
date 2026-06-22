@@ -7,7 +7,7 @@
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'node:path';
-import { BridgeSupervisor } from './bridge-supervisor.js';
+import { registerV2Ipc } from './v2-ipc.js';
 import {
   installAppHandler,
   registerAppScheme,
@@ -27,24 +27,14 @@ declare const __dirname: string;
 // extraResources (Node can't dlopen / LS can't read assets inside
 // asar). lensDesignerPackPath() resolves both.
 const PRELOAD_PATH = join(__dirname, '..', 'preload', 'preload.cjs');
-const BRIDGE_ENTRY = join(__dirname, '..', 'bridge', 'bridge.cjs');
 const WEB_DIR = join(__dirname, '..', 'web');
 const APP_URL = `${APP_PROTOCOL_SCHEME}://${APP_PROTOCOL_HOST}/index.html`;
-
-function lensDesignerPackPath(): string {
-  // Packaged build: electron-builder writes extraResources to
-  // process.resourcesPath. Dev: dist/assets/, next to bridge/.
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'LensDesigner.lspkg');
-  }
-  return join(__dirname, '..', 'assets', 'LensDesigner.lspkg');
-}
 
 // Must register before app.whenReady (Electron requirement).
 registerAppScheme();
 
 let mainWindow: BrowserWindow | null = null;
-let supervisor: BridgeSupervisor | null = null;
+let v2: { dispose: () => void } | null = null;
 const settings = new SettingsStore();
 
 function createMainWindow(): void {
@@ -115,24 +105,17 @@ function createMainWindow(): void {
   });
 }
 
-function startBridge(): void {
-  supervisor = new BridgeSupervisor({
-    bridgeEntryPath: BRIDGE_ENTRY,
-    env: { LENS_DESIGNER_PACK_PATH: lensDesignerPackPath() },
+function startServices(): void {
+  const { orchestrator, dispose } = registerV2Ipc({ getMainWindow: () => mainWindow });
+  v2 = { dispose };
+  orchestrator.on('connection', (s) => {
+    process.stdout.write(`[ld] LS connection: ${s.kind}\n`);
   });
-  supervisor.on('log', (line, stream) => {
-    const prefix = stream === 'stderr' ? '[bridge!]' : '[bridge]';
-    process.stdout.write(`${prefix} ${line}\n`);
-  });
-  supervisor.on('state', (state) => {
-    process.stdout.write(`[supervisor] bridge state: ${state.kind}\n`);
-  });
-  supervisor.start();
 }
 
-function stopBridge(): void {
-  supervisor?.stop();
-  supervisor = null;
+function stopServices(): void {
+  v2?.dispose();
+  v2 = null;
 }
 
 function registerIpc(): void {
@@ -153,7 +136,7 @@ app.whenReady().then(async () => {
   await settings.init();
   installAppHandler(WEB_DIR);
   registerIpc();
-  startBridge();
+  startServices();
   createMainWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
@@ -161,7 +144,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
-  stopBridge();
+  stopServices();
 });
 
 app.on('window-all-closed', () => {
@@ -170,7 +153,7 @@ app.on('window-all-closed', () => {
   // the non-Mac branch here is dead code that satisfies the
   // documented Electron convention for future platforms.)
   if (process.platform !== 'darwin') {
-    stopBridge();
+    stopServices();
     app.quit();
   }
 });

@@ -115,3 +115,76 @@ const api: LensDesignerNative = {
 };
 
 contextBridge.exposeInMainWorld('lensDesignerNative', api);
+
+// ── v2 cockpit API (window.ld) ──────────────────────────────────────────
+// Connection status, agent turns (streamed), and direct MCP reads.
+
+export type LDConnState =
+  | { kind: 'disconnected'; reason?: string }
+  | { kind: 'connecting' }
+  | { kind: 'connected'; server: string; version: string; port: number; clad: boolean };
+
+export type LDAgentEvent =
+  | { kind: 'session'; sessionId: string }
+  | { kind: 'assistant'; text: string }
+  | { kind: 'tool'; tool: string; status: 'running' }
+  | { kind: 'tool-result'; tool: string; ok: boolean }
+  | { kind: 'result'; ok: boolean; text: string; costUsd: number | null; sessionId: string | null }
+  | { kind: 'error'; message: string };
+
+export interface LDApi {
+  connection: {
+    get(): Promise<LDConnState>;
+    reconnect(): Promise<void>;
+    onChange(handler: (s: LDConnState) => void): () => void;
+  };
+  project: {
+    dir(): Promise<string | null>;
+  };
+  scene: {
+    tools(): Promise<{ count: number; sample: string[]; server: unknown }>;
+  };
+  agent: {
+    run(req: { prompt: string; resumeSessionId?: string; cwd?: string }): Promise<{
+      sessionId: string | null;
+      ok: boolean;
+    }>;
+    cancel(): Promise<void>;
+    onEvent(handler: (e: LDAgentEvent) => void): () => void;
+  };
+}
+
+const ld: LDApi = {
+  connection: {
+    get: () => ipcRenderer.invoke('ld:connection:get') as Promise<LDConnState>,
+    reconnect: () => ipcRenderer.invoke('ld:connection:reconnect') as Promise<void>,
+    onChange: (handler) => {
+      const listener = (_e: Electron.IpcRendererEvent, s: LDConnState): void => handler(s);
+      ipcRenderer.on('ld:connection', listener);
+      return () => ipcRenderer.removeListener('ld:connection', listener);
+    },
+  },
+  project: {
+    dir: () => ipcRenderer.invoke('ld:project:dir') as Promise<string | null>,
+  },
+  scene: {
+    tools: () =>
+      ipcRenderer.invoke('ld:scene:tools') as Promise<{
+        count: number;
+        sample: string[];
+        server: unknown;
+      }>,
+  },
+  agent: {
+    run: (req) =>
+      ipcRenderer.invoke('ld:agent:run', req) as Promise<{ sessionId: string | null; ok: boolean }>,
+    cancel: () => ipcRenderer.invoke('ld:agent:cancel') as Promise<void>,
+    onEvent: (handler) => {
+      const listener = (_e: Electron.IpcRendererEvent, ev: LDAgentEvent): void => handler(ev);
+      ipcRenderer.on('ld:agent-event', listener);
+      return () => ipcRenderer.removeListener('ld:agent-event', listener);
+    },
+  },
+};
+
+contextBridge.exposeInMainWorld('ld', ld);

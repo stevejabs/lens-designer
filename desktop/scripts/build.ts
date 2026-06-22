@@ -38,19 +38,11 @@ interface BundleTarget {
 
 const TARGETS: ReadonlyArray<BundleTarget> = [
   // Electron's main + preload loaders prefer CJS; we keep them CJS.
-  // Main + preload don't use import.meta.url so no shim needed.
+  // Main + preload don't use import.meta.url so no shim needed. The v2 main
+  // process owns the LS MCP connection + agent orchestration directly — the
+  // v1 bridge daemon (utilityProcess) transport is retired.
   { entry: 'src/main.ts', outfile: 'dist/main/main.cjs', format: 'cjs' },
   { entry: 'src/preload.ts', outfile: 'dist/preload/preload.cjs', format: 'cjs' },
-  // utilityProcess.fork loads .cjs natively. CJS bundling lets us pull
-  // in CJS-only deps (ws, node-stream-zip) without the ESM-from-CJS
-  // dance. `import.meta.url` usages in bridge/src are substituted via
-  // esbuild's `define` to a CJS-compatible runtime expression.
-  {
-    entry: '../bridge/src/daemon.ts',
-    outfile: 'dist/bridge/bridge.cjs',
-    format: 'cjs',
-    importMetaShim: true,
-  },
 ];
 
 async function run(): Promise<void> {
