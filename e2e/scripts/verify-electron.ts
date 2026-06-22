@@ -96,6 +96,15 @@ async function main(): Promise<void> {
   });
   console.log('audio element state:', JSON.stringify(audioState));
 
+  // 6. Refine: typing a prompt + clicking Refine should route it to the agent
+  //    thread (user message appears, run starts). We don't wait for the run.
+  const refineInput = win.locator('input[placeholder*="cartoonish"], input[placeholder*="warmer"]').first();
+  await refineInput.fill('zztest-refine-marker').catch(() => {});
+  await win.locator('button:has-text("Refine")').first().click().catch(() => {});
+  await win.waitForTimeout(2500);
+  const agentText = await win.locator('aside:has-text("Agent")').innerText().catch(() => '');
+  console.log('refine routed to agent (marker in thread):', /zztest-refine-marker/.test(agentText));
+
   console.log('screenshots: /tmp/ld-electron-{designer,preview,assets}.png');
   void viewsText;
   await app.close();

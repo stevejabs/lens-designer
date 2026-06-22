@@ -19,6 +19,9 @@ interface UiState {
   artifactNonce: number;
   /** The artifact (view/asset) the agent thread is scoped to. */
   activeArtifact: { path: string; id: string; name: string; kind: 'view' | 'asset' } | null;
+  /** A prompt queued to auto-send to the agent once the active artifact's
+   *  context has loaded (used by the asset/view "Refine" affordance). */
+  queuedPrompt: string | null;
 
   setMode: (mode: WorkspaceMode) => void;
   setPosture: (posture: Posture) => void;
@@ -37,6 +40,9 @@ interface UiState {
   /** Signal that project artifacts likely changed (agent run finished). */
   bumpArtifacts: () => void;
   setActiveArtifact: (a: UiState['activeArtifact']) => void;
+  /** Scope the agent to `artifact` and auto-send `prompt` once its context loads. */
+  refineArtifact: (a: NonNullable<UiState['activeArtifact']>, prompt: string) => void;
+  clearQueuedPrompt: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -51,6 +57,7 @@ export const useUiStore = create<UiState>((set) => ({
   agentResetNonce: 0,
   artifactNonce: 0,
   activeArtifact: null,
+  queuedPrompt: null,
 
   setMode: (mode) => set({ mode }),
   setPosture: (posture) => set({ posture }),
@@ -73,4 +80,7 @@ export const useUiStore = create<UiState>((set) => ({
     set((s) => ({ agentResetNonce: s.agentResetNonce + 1, agentOpen: true })),
   bumpArtifacts: () => set((s) => ({ artifactNonce: s.artifactNonce + 1 })),
   setActiveArtifact: (activeArtifact) => set({ activeArtifact }),
+  refineArtifact: (activeArtifact, prompt) =>
+    set({ activeArtifact, queuedPrompt: prompt, agentOpen: true }),
+  clearQueuedPrompt: () => set({ queuedPrompt: null }),
 }));

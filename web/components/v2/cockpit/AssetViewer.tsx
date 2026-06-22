@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
 import { useFileUrl } from '@/lib/v2/hooks';
+import { useUiStore } from '@/lib/v2/ui-store';
 import type { AssetItem } from '@/lib/v2/types';
 import { Button, Pill, SectionLabel } from '../ui/Primitives';
 import { GLBViewer } from './GLBViewer';
@@ -163,6 +164,15 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
 export function AssetViewer({ asset }: { asset: AssetItem | null }) {
   // Real file bytes for the selected asset (null in the browser / for mock ids).
   const url = useFileUrl(asset?.id ?? null);
+  const refineArtifact = useUiStore((s) => s.refineArtifact);
+  const [refinePrompt, setRefinePrompt] = useState('');
+
+  const submitRefine = (): void => {
+    const p = refinePrompt.trim();
+    if (!p || !asset) return;
+    refineArtifact({ path: asset.id, id: asset.id, name: asset.name, kind: 'asset' }, p);
+    setRefinePrompt('');
+  };
 
   if (!asset) {
     return (
@@ -205,22 +215,38 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
         </div>
       )}
 
-      {/* re-prompt */}
-      {asset.hasContext && (
+      {/* re-prompt — routes the prompt to the agent, scoped to this asset */}
+      {asset.status === 'ready' && (
         <div className="rounded-lg border border-subtle bg-bg-1 p-3">
           <div className="flex items-center justify-between mb-2">
             <SectionLabel>Refine with a prompt</SectionLabel>
-            <Pill tone="violet"><Sparkles className="w-3 h-3" /> thread saved</Pill>
+            {asset.hasContext && (
+              <Pill tone="violet"><Sparkles className="w-3 h-3" /> thread saved</Pill>
+            )}
           </div>
           {asset.prompt && (
             <p className="text-xs text-text-tertiary mb-2 italic">“{asset.prompt}”</p>
           )}
           <div className="flex items-center gap-2">
             <input
-              placeholder="e.g. make it smaller and add a lock"
+              value={refinePrompt}
+              onChange={(e) => setRefinePrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitRefine();
+                }
+              }}
+              placeholder={
+                asset.kind === 'mesh'
+                  ? 'e.g. make it smaller and more cartoonish'
+                  : 'e.g. make it warmer and shorter'
+              }
               className="flex-1 h-9 px-3 rounded-md bg-bg-2 border border-default text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-strong"
             />
-            <Button variant="primary" size="md" icon={<Sparkles />}>Refine</Button>
+            <Button variant="primary" size="md" icon={<Sparkles />} onClick={submitRefine} disabled={!refinePrompt.trim()}>
+              Refine
+            </Button>
           </div>
         </div>
       )}

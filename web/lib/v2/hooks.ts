@@ -248,6 +248,9 @@ export function useAgentThread(initial: AgentMessage[] = []) {
   const activeArtifact = useUiStore((s) => s.activeArtifact);
   const artifactRef = useRef(activeArtifact);
   artifactRef.current = activeArtifact;
+  // Holds the latest send() so the context-load effect can fire a queued
+  // "Refine" prompt after the artifact's session is set (avoids ordering races).
+  const sendRef = useRef<(p: string) => void>(() => {});
 
   const append = useCallback((m: AgentMessage) => {
     setMessages((prev) => [...prev, m]);
@@ -260,24 +263,27 @@ export function useAgentThread(initial: AgentMessage[] = []) {
   useEffect(() => {
     const ld = getLd();
     if (!ld || !artifactPath) return;
+    // If a refine prompt is queued for this artifact, only resolve the session
+    // (don't seed the prior thread) so the about-to-send message isn't clobbered.
+    const skipSeed = useUiStore.getState().queuedPrompt != null;
     let alive = true;
     void ld.context.get(artifactPath).then((ctx) => {
       if (!alive) return;
+      sessionRef.current = ctx?.sessionId ?? null;
+      if (skipSeed) return;
       if (!ctx) {
-        sessionRef.current = null;
         setMessages([]);
-        return;
+      } else {
+        const seeded: AgentMessage[] = ctx.promptHistory.map((p, i) => ({
+          id: `seed-${i}`,
+          role: 'user' as const,
+          text: p,
+        }));
+        if (ctx.distilledSummary) {
+          seeded.push({ id: 'seed-summary', role: 'assistant', text: ctx.distilledSummary, status: 'done' });
+        }
+        setMessages(seeded);
       }
-      sessionRef.current = ctx.sessionId;
-      const seeded: AgentMessage[] = ctx.promptHistory.map((p, i) => ({
-        id: `seed-${i}`,
-        role: 'user' as const,
-        text: p,
-      }));
-      if (ctx.distilledSummary) {
-        seeded.push({ id: 'seed-summary', role: 'assistant', text: ctx.distilledSummary, status: 'done' });
-      }
-      setMessages(seeded);
     });
     return () => {
       alive = false;
@@ -340,10 +346,18 @@ export function useAgentThread(initial: AgentMessage[] = []) {
       }
       setRunning(true);
       const artifact = artifactRef.current;
+      // Resolve the resumable session for this artifact if we don't have it
+      // yet (e.g. refining an asset whose thread hasn't been opened this session).
+      let resume = sessionRef.current;
+      if (artifact && !resume) {
+        const ctx = await ld.context.get(artifact.path);
+        resume = ctx?.sessionId ?? null;
+        sessionRef.current = resume;
+      }
       try {
         await ld.agent.run({
           prompt: trimmed,
-          ...(sessionRef.current ? { resumeSessionId: sessionRef.current } : {}),
+          ...(resume ? { resumeSessionId: resume } : {}),
           ...(artifact ? { artifactPath: artifact.path, artifactId: artifact.id } : {}),
         });
       } catch (err) {
@@ -353,6 +367,18 @@ export function useAgentThread(initial: AgentMessage[] = []) {
     },
     [append],
   );
+  sendRef.current = send;
+
+  // Auto-send a queued "Refine" prompt. Works whether or not the artifact's
+  // path changed (selecting an asset then refining it keeps the same path, so
+  // this can't rely on the context-load effect).
+  const queuedPrompt = useUiStore((s) => s.queuedPrompt);
+  const clearQueuedPrompt = useUiStore((s) => s.clearQueuedPrompt);
+  useEffect(() => {
+    if (!queuedPrompt) return;
+    clearQueuedPrompt();
+    sendRef.current(queuedPrompt);
+  }, [queuedPrompt, clearQueuedPrompt]);
 
   const cancel = useCallback(() => {
     void getLd()?.agent.cancel();
