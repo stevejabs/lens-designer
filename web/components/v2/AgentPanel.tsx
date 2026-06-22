@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles, ArrowUp, Wrench, Check, Loader2, Terminal, Plus } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
 import { MOCK_THREAD } from '@/lib/v2/mock-data';
 import { useAgentThread } from '@/lib/v2/hooks';
+import { useUiStore } from '@/lib/v2/ui-store';
 import type { AgentMessage } from '@/lib/v2/types';
 import { Pill } from './ui/Primitives';
 
@@ -63,6 +64,16 @@ export function AgentPanel() {
   const [draft, setDraft] = useState('');
   const { messages, running, send, electron } = useAgentThread(MOCK_THREAD);
   const cliConnected = electron;
+
+  // Consume a one-shot prefill pushed from elsewhere (e.g. New Asset → prompt).
+  const agentPrefill = useUiStore((s) => s.agentPrefill);
+  const clearAgentPrefill = useUiStore((s) => s.clearAgentPrefill);
+  useEffect(() => {
+    if (agentPrefill) {
+      setDraft(agentPrefill);
+      clearAgentPrefill();
+    }
+  }, [agentPrefill, clearAgentPrefill]);
 
   const submit = (): void => {
     const text = draft.trim();

@@ -11,6 +11,8 @@ interface UiState {
   inspectorOpen: boolean;
   selectedAssetId: string | null;
   selectedViewId: string | null;
+  /** One-shot prompt text pushed into the Agent composer (e.g. New Asset). */
+  agentPrefill: string | null;
 
   setMode: (mode: WorkspaceMode) => void;
   setPosture: (posture: Posture) => void;
@@ -21,6 +23,9 @@ interface UiState {
   toggleInspector: () => void;
   selectAsset: (id: string | null) => void;
   selectView: (id: string | null) => void;
+  /** Open the agent panel and seed the composer with `text`. */
+  promptAgent: (text: string) => void;
+  clearAgentPrefill: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -31,6 +36,7 @@ export const useUiStore = create<UiState>((set) => ({
   inspectorOpen: true,
   selectedAssetId: 'a1',
   selectedViewId: 'v1',
+  agentPrefill: null,
 
   setMode: (mode) => set({ mode }),
   setPosture: (posture) => set({ posture }),
@@ -42,4 +48,6 @@ export const useUiStore = create<UiState>((set) => ({
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   selectAsset: (selectedAssetId) => set({ selectedAssetId }),
   selectView: (selectedViewId) => set({ selectedViewId }),
+  promptAgent: (text) => set({ agentPrefill: text, agentOpen: true }),
+  clearAgentPrefill: () => set({ agentPrefill: null }),
 }));

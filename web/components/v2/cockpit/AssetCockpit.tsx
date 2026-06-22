@@ -5,15 +5,15 @@ import { Box, Music, AudioWaveform, Plus, Search, Sparkles, Upload } from 'lucid
 import type { LucideIcon } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { cn } from '@/lib/v2/cn';
-import { MOCK_ASSETS } from '@/lib/v2/mock-data';
+import { useAssets } from '@/lib/v2/hooks';
 import type { AssetKind } from '@/lib/v2/types';
 import { AssetCard } from './AssetCard';
 import { AssetViewer } from './AssetViewer';
 
-const NEW_OPTIONS: { kind: AssetKind; label: string; icon: LucideIcon }[] = [
-  { kind: 'mesh', label: '3D Asset', icon: Box },
-  { kind: 'music', label: 'Music', icon: Music },
-  { kind: 'sfx', label: 'SFX', icon: AudioWaveform },
+const NEW_OPTIONS: { kind: AssetKind; label: string; icon: LucideIcon; template: string }[] = [
+  { kind: 'mesh', label: '3D Asset', icon: Box, template: 'Generate a 3D asset: ' },
+  { kind: 'music', label: 'Music', icon: Music, template: 'Generate music: ' },
+  { kind: 'sfx', label: 'SFX', icon: AudioWaveform, template: 'Generate a sound effect: ' },
 ];
 
 type Filter = 'all' | AssetKind;
@@ -26,6 +26,7 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 function NewAssetMenu() {
   const [open, setOpen] = useState(false);
+  const promptAgent = useUiStore((s) => s.promptAgent);
   return (
     <div className="relative">
       <button
@@ -42,7 +43,10 @@ function NewAssetMenu() {
             {NEW_OPTIONS.map((o) => (
               <button
                 key={o.kind}
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  promptAgent(o.template);
+                }}
                 className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-text-secondary hover:text-text-primary hover:bg-bg-3 transition-colors"
               >
                 <o.icon className="w-4 h-4 text-accent-400" />
@@ -65,9 +69,10 @@ export function AssetCockpit() {
   const selectedId = useUiStore((s) => s.selectedAssetId);
   const selectAsset = useUiStore((s) => s.selectAsset);
   const [filter, setFilter] = useState<Filter>('all');
+  const { assets: allAssets } = useAssets();
 
-  const assets = MOCK_ASSETS.filter((a) => filter === 'all' || a.kind === filter);
-  const selected = MOCK_ASSETS.find((a) => a.id === selectedId) ?? null;
+  const assets = allAssets.filter((a) => filter === 'all' || a.kind === filter);
+  const selected = allAssets.find((a) => a.id === selectedId) ?? null;
 
   return (
     <div className="flex flex-1 min-h-0">
@@ -76,7 +81,7 @@ export function AssetCockpit() {
         <div className="flex items-center justify-between h-11 px-4 border-b border-subtle">
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-semibold text-text-primary">Assets</h1>
-            <span className="text-2xs text-text-tertiary font-num">{MOCK_ASSETS.length}</span>
+            <span className="text-2xs text-text-tertiary font-num">{allAssets.length}</span>
           </div>
           <NewAssetMenu />
         </div>

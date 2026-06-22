@@ -132,6 +132,18 @@ export type LDAgentEvent =
   | { kind: 'result'; ok: boolean; text: string; costUsd: number | null; sessionId: string | null }
   | { kind: 'error'; message: string };
 
+export interface LDScannedAsset {
+  id: string;
+  name: string;
+  kind: 'mesh' | 'music' | 'sfx';
+  path: string;
+  origin: 'prompt' | 'import';
+  updatedMs: number;
+  sizeBytes: number;
+  hasContext: boolean;
+  prompt?: string;
+}
+
 export interface LDApi {
   connection: {
     get(): Promise<LDConnState>;
@@ -143,6 +155,9 @@ export interface LDApi {
   };
   scene: {
     tools(): Promise<{ count: number; sample: string[]; server: unknown }>;
+  };
+  assets: {
+    list(): Promise<LDScannedAsset[]>;
   };
   agent: {
     run(req: { prompt: string; resumeSessionId?: string; cwd?: string }): Promise<{
@@ -174,6 +189,9 @@ const ld: LDApi = {
         sample: string[];
         server: unknown;
       }>,
+  },
+  assets: {
+    list: () => ipcRenderer.invoke('ld:assets:list') as Promise<LDScannedAsset[]>,
   },
   agent: {
     run: (req) =>

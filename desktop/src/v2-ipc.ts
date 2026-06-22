@@ -7,6 +7,7 @@
 import { ipcMain, type BrowserWindow } from 'electron';
 import { Orchestrator } from './services/orchestrator.js';
 import { resolveProjectDir } from './services/project.js';
+import { scanAssets } from './services/assets.js';
 import type { ConnState } from './services/ls-connection.js';
 
 export interface V2IpcDeps {
@@ -44,6 +45,15 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
       const tools = await client.listTools();
       return { count: tools.length, sample: tools.slice(0, 12), server: client.serverInfo };
     });
+  });
+
+  // ── Assets ──
+  ipcMain.handle('ld:assets:list', async () => {
+    const conn = orchestrator.getConnection();
+    if (conn.kind !== 'connected') return [];
+    const dir = await resolveProjectDir(conn.port);
+    if (!dir) return [];
+    return scanAssets(dir);
   });
 
   // ── Agent ──

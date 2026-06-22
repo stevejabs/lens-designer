@@ -1,8 +1,61 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getLd, type LDConnState, type LDAgentEvent } from './native';
-import type { AgentMessage } from './types';
+import { getLd, type LDConnState, type LDAgentEvent, type LDScannedAsset } from './native';
+import type { AgentMessage, AssetItem } from './types';
+import { MOCK_ASSETS } from './mock-data';
+
+function relTime(ms: number): string {
+  const s = Math.max(1, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function toAssetItem(a: LDScannedAsset): AssetItem {
+  return {
+    id: a.id,
+    name: a.name,
+    kind: a.kind,
+    status: 'ready',
+    origin: a.origin,
+    ...(a.prompt ? { prompt: a.prompt } : {}),
+    updated: relTime(a.updatedMs),
+    meta: { size: fmtSize(a.sizeBytes) },
+    hasContext: a.hasContext,
+  };
+}
+
+/** Real project assets in Electron; mock data in the browser. */
+export function useAssets(): { assets: AssetItem[]; loading: boolean; refresh: () => void } {
+  const [assets, setAssets] = useState<AssetItem[]>(() => (getLd() ? [] : MOCK_ASSETS));
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(() => {
+    const ld = getLd();
+    if (!ld) return;
+    setLoading(true);
+    void ld.assets
+      .list()
+      .then((list) => setAssets(list.map(toAssetItem)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { assets, loading, refresh };
+}
 
 /** Live LS connection state from the desktop shell (disconnected in browser). */
 export function useConnection(): LDConnState {
