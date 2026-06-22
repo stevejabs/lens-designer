@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 function base64ToArrayBuffer(b64: string): ArrayBuffer {
   const bin = atob(b64);
@@ -12,8 +13,9 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-/** Real-time GLB viewer: orbit-controlled, auto-framed, lit. */
-export function GLBViewer({ dataUrl }: { dataUrl: string }) {
+/** Real-time GLB viewer: orbit-controlled, auto-framed, lit.
+ *  `interactive=false` (thumbnails) disables controls + pointer capture. */
+export function GLBViewer({ dataUrl, interactive = true }: { dataUrl: string; interactive?: boolean }) {
   const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,7 +29,13 @@ export function GLBViewer({ dataUrl }: { dataUrl: string }) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
     mount.appendChild(renderer.domElement);
+
+    // Image-based lighting so glTF PBR materials (metalness/roughness) read
+    // correctly instead of rendering flat.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.9));
     const key = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -40,7 +48,9 @@ export function GLBViewer({ dataUrl }: { dataUrl: string }) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 1.2;
+    controls.autoRotateSpeed = interactive ? 1.2 : 2.4;
+    controls.enabled = interactive;
+    if (!interactive) renderer.domElement.style.pointerEvents = 'none';
 
     let disposed = false;
     let raf = 0;
@@ -93,10 +103,11 @@ export function GLBViewer({ dataUrl }: { dataUrl: string }) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
+      pmrem.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
     };
-  }, [dataUrl]);
+  }, [dataUrl, interactive]);
 
   return <div ref={mountRef} className="absolute inset-0" />;
 }

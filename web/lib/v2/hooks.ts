@@ -50,6 +50,7 @@ export function useAssets(): { assets: AssetItem[]; loading: boolean; refresh: (
   const [loading, setLoading] = useState(false);
 
   const artifactNonce = useUiStore((s) => s.artifactNonce);
+  const conn = useConnection();
 
   const refresh = useCallback(() => {
     const ld = getLd();
@@ -61,9 +62,11 @@ export function useAssets(): { assets: AssetItem[]; loading: boolean; refresh: (
       .finally(() => setLoading(false));
   }, []);
 
+  // Re-scan on mount, after a run, and once the connection goes live (the
+  // first mount usually precedes the LS connection being ready).
   useEffect(() => {
-    refresh();
-  }, [refresh, artifactNonce]);
+    if (conn.kind === 'connected') refresh();
+  }, [refresh, artifactNonce, conn.kind]);
 
   return { assets, loading, refresh };
 }
@@ -82,6 +85,7 @@ function toDesignView(v: LDScannedView): DesignView {
 export function useViews(): { views: DesignView[]; refresh: () => void } {
   const [views, setViews] = useState<DesignView[]>(() => (getLd() ? [] : MOCK_VIEWS));
   const artifactNonce = useUiStore((s) => s.artifactNonce);
+  const conn = useConnection();
 
   const refresh = useCallback(() => {
     const ld = getLd();
@@ -90,8 +94,8 @@ export function useViews(): { views: DesignView[]; refresh: () => void } {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh, artifactNonce]);
+    if (conn.kind === 'connected') refresh();
+  }, [refresh, artifactNonce, conn.kind]);
 
   return { views, refresh };
 }
@@ -101,6 +105,8 @@ export function usePreview(): { image: string | null; capturing: boolean; captur
   const [image, setImage] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
   const artifactNonce = useUiStore((s) => s.artifactNonce);
+  const activeArtifact = useUiStore((s) => s.activeArtifact);
+  const conn = useConnection();
 
   const capture = useCallback(() => {
     const ld = getLd();
@@ -108,13 +114,17 @@ export function usePreview(): { image: string | null; capturing: boolean; captur
     setCapturing(true);
     void ld.preview
       .capture()
-      .then((img) => setImage(img))
+      .then((img) => {
+        if (img) setImage(img);
+      })
       .finally(() => setCapturing(false));
   }, []);
 
+  // Capture once connected, after edits (artifactNonce), and when the
+  // selected view changes. Connected-trigger fixes the blank-on-open case.
   useEffect(() => {
-    capture();
-  }, [capture, artifactNonce]);
+    if (conn.kind === 'connected') capture();
+  }, [capture, artifactNonce, conn.kind, activeArtifact?.path]);
 
   return { image, capturing, capture };
 }

@@ -79,22 +79,24 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [error, setError] = useState(false);
   const bars = 64;
 
   useEffect(() => {
     setPlaying(false);
     setProgress(0);
+    setError(false);
   }, [url]);
 
+  // Don't optimistically flip the icon — let the element's real play/pause/
+  // error events drive state, so a file that won't decode can't get stuck.
   const toggle = (): void => {
     const a = audioRef.current;
     if (!a || !url) return;
     if (a.paused) {
-      void a.play();
-      setPlaying(true);
+      a.play().catch(() => setError(true));
     } else {
       a.pause();
-      setPlaying(false);
     }
   };
 
@@ -104,10 +106,21 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
         <audio
           ref={audioRef}
           src={url}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
           onEnded={() => setPlaying(false)}
+          onError={() => {
+            setError(true);
+            setPlaying(false);
+          }}
         />
+      )}
+      {error && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+          <Pill tone="danger">audio failed to decode</Pill>
+        </div>
       )}
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="flex items-end gap-[3px] h-28 w-full max-w-md">

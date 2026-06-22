@@ -55,12 +55,11 @@ async function main(): Promise<void> {
   console.log('has WelcomeBannerUI in UI:', /WelcomeBanner/i.test(allText));
   console.log('has LDValidationPanel in UI:', /LDValidationPanel/i.test(allText));
 
+  // 3. The live preview should AUTO-load once connected (no manual refresh).
+  await win.waitForTimeout(6000);
+  const autoPreview = await win.locator('img[alt="Live Lens Studio preview"]').count();
+  console.log('auto-loaded preview image present:', autoPreview > 0);
   await win.screenshot({ path: '/tmp/ld-electron-designer.png' });
-
-  // 3. Capture live preview (click the re-capture button).
-  await win.locator('[title="Re-capture live preview"]').click().catch(() => {});
-  await win.waitForTimeout(4000);
-  await win.screenshot({ path: '/tmp/ld-electron-preview.png' });
 
   // 4. Back to Assets; select the first card and confirm the viewer renders.
   await win.locator('[title="Assets"]').click();

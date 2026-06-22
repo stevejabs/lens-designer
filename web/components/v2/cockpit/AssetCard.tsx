@@ -1,9 +1,22 @@
 'use client';
 
-import { Box, Music, AudioWaveform, Loader2, Sparkles, Download, AlertTriangle } from 'lucide-react';
+import { useRef, useState, type MouseEvent } from 'react';
+import {
+  Box,
+  Music,
+  AudioWaveform,
+  Loader2,
+  Sparkles,
+  Download,
+  AlertTriangle,
+  Play,
+  Pause,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
+import { useFileUrl } from '@/lib/v2/hooks';
 import type { AssetItem, AssetKind } from '@/lib/v2/types';
+import { GLBViewer } from './GLBViewer';
 
 const KIND_ICON: Record<AssetKind, LucideIcon> = {
   mesh: Box,
@@ -17,10 +30,74 @@ const KIND_LABEL: Record<AssetKind, string> = {
   sfx: 'SFX',
 };
 
-// A small per-kind visual so the card thumbnail reads at a glance.
-function Thumb({ asset }: { asset: AssetItem }) {
-  const Icon = KIND_ICON[asset.kind];
+const gridBg = (
+  <div
+    className="absolute inset-0 opacity-[0.07]"
+    style={{
+      backgroundImage:
+        'linear-gradient(var(--accent-400) 1px, transparent 1px), linear-gradient(90deg, var(--accent-400) 1px, transparent 1px)',
+      backgroundSize: '14px 14px',
+    }}
+  />
+);
 
+/** Live rotating 3D thumbnail for a mesh card. */
+function MeshThumb({ asset }: { asset: AssetItem }) {
+  const url = useFileUrl(asset.status === 'ready' ? asset.id : null);
+  return (
+    <div className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden">
+      {gridBg}
+      {url ? (
+        <GLBViewer dataUrl={url} interactive={false} />
+      ) : (
+        <Loader2 className="relative w-5 h-5 text-text-tertiary animate-spin" />
+      )}
+    </div>
+  );
+}
+
+/** Audio card thumbnail with a centered inline play/pause button. */
+function AudioThumb({ asset }: { asset: AssetItem }) {
+  const Icon = KIND_ICON[asset.kind];
+  const url = useFileUrl(asset.status === 'ready' ? asset.id : null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+
+  const toggle = (e: MouseEvent): void => {
+    e.stopPropagation(); // don't open the asset — just play
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) a.play().catch(() => setPlaying(false));
+    else a.pause();
+  };
+
+  return (
+    <div className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden">
+      {gridBg}
+      <Icon className="relative w-8 h-8 text-text-secondary" strokeWidth={1.4} />
+      {url && (
+        <audio
+          ref={audioRef}
+          src={url}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+        />
+      )}
+      <button
+        onClick={toggle}
+        disabled={!url}
+        title={playing ? 'Pause' : 'Play'}
+        className="absolute inset-0 m-auto w-9 h-9 rounded-full accent-bg text-text-inverse flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 data-[on=true]:opacity-100 transition-opacity hover:brightness-110 disabled:opacity-0"
+        data-on={playing}
+      >
+        {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+      </button>
+    </div>
+  );
+}
+
+function Thumb({ asset }: { asset: AssetItem }) {
   if (asset.status === 'generating') {
     return (
       <div className="relative flex items-center justify-center h-24 rounded-md bg-bg-1 overflow-hidden">
@@ -32,25 +109,20 @@ function Thumb({ asset }: { asset: AssetItem }) {
       </div>
     );
   }
-
-  return (
-    <div className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden">
-      <div
-        className="absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            'linear-gradient(var(--accent-400) 1px, transparent 1px), linear-gradient(90deg, var(--accent-400) 1px, transparent 1px)',
-          backgroundSize: '14px 14px',
-        }}
-      />
-      <Icon className="relative w-8 h-8 text-text-secondary" strokeWidth={1.4} />
-      {asset.status === 'failed' && (
+  if (asset.status === 'failed') {
+    const Icon = KIND_ICON[asset.kind];
+    return (
+      <div className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden">
+        {gridBg}
+        <Icon className="relative w-8 h-8 text-text-secondary" strokeWidth={1.4} />
         <span className="absolute top-1.5 right-1.5 text-danger">
           <AlertTriangle className="w-3.5 h-3.5" />
         </span>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+  if (asset.kind === 'mesh') return <MeshThumb asset={asset} />;
+  return <AudioThumb asset={asset} />;
 }
 
 export function AssetCard({
@@ -63,10 +135,18 @@ export function AssetCard({
   onClick?: () => void;
 }) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
       className={cn(
-        'group text-left p-2 rounded-lg border transition-all duration-150 ease-spring animate-fade-in',
+        'group block text-left p-2 rounded-lg border cursor-pointer transition-all duration-150 ease-spring animate-fade-in',
         selected
           ? 'border-[rgba(34,211,238,0.4)] bg-bg-2 glow-ring'
           : 'border-subtle bg-bg-1 hover:border-default hover:bg-bg-2',
@@ -87,6 +167,6 @@ export function AssetCard({
           <span className="text-2xs text-text-tertiary">{asset.updated}</span>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
