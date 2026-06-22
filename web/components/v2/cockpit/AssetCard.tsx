@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
-import { useFileUrl } from '@/lib/v2/hooks';
+import { useFileUrl, useInView } from '@/lib/v2/hooks';
 import type { AssetItem, AssetKind } from '@/lib/v2/types';
 import { GLBViewer } from './GLBViewer';
 
@@ -41,16 +41,22 @@ const gridBg = (
   />
 );
 
-/** Live rotating 3D thumbnail for a mesh card. */
+/** Live rotating 3D thumbnail for a mesh card — lazily loaded once in view. */
 function MeshThumb({ asset }: { asset: AssetItem }) {
-  const url = useFileUrl(asset.status === 'ready' ? asset.id : null);
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const url = useFileUrl(inView && asset.status === 'ready' ? asset.id : null);
   return (
-    <div className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden">
+    <div
+      ref={ref}
+      className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden"
+    >
       {gridBg}
       {url ? (
         <GLBViewer dataUrl={url} interactive={false} />
-      ) : (
+      ) : inView ? (
         <Loader2 className="relative w-5 h-5 text-text-tertiary animate-spin" />
+      ) : (
+        <Box className="relative w-8 h-8 text-text-secondary" strokeWidth={1.4} />
       )}
     </div>
   );
@@ -59,7 +65,8 @@ function MeshThumb({ asset }: { asset: AssetItem }) {
 /** Audio card thumbnail with a centered inline play/pause button. */
 function AudioThumb({ asset }: { asset: AssetItem }) {
   const Icon = KIND_ICON[asset.kind];
-  const url = useFileUrl(asset.status === 'ready' ? asset.id : null);
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const url = useFileUrl(inView && asset.status === 'ready' ? asset.id : null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -72,7 +79,10 @@ function AudioThumb({ asset }: { asset: AssetItem }) {
   };
 
   return (
-    <div className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden">
+    <div
+      ref={ref}
+      className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden"
+    >
       {gridBg}
       <Icon className="relative w-8 h-8 text-text-secondary" strokeWidth={1.4} />
       {url && (

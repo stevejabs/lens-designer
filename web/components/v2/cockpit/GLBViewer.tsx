@@ -62,6 +62,29 @@ export function GLBViewer({ dataUrl, interactive = true }: { dataUrl: string; in
         (gltf) => {
           if (disposed) return;
           const model = gltf.scene;
+          // Ensure baked glTF textures render: correct color space, keep IBL
+          // from washing out the diffuse, flag for update. (Diagnostic counts
+          // exposed on the mount for self-verification.)
+          let meshCount = 0;
+          let mapCount = 0;
+          model.traverse((o) => {
+            const mesh = o as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            meshCount++;
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const mat of mats) {
+              const std = mat as THREE.MeshStandardMaterial;
+              if (std.map) {
+                mapCount++;
+                std.map.colorSpace = THREE.SRGBColorSpace;
+              }
+              if ('envMapIntensity' in std) std.envMapIntensity = 0.5;
+              std.needsUpdate = true;
+            }
+          });
+          mount.dataset['meshes'] = String(meshCount);
+          mount.dataset['maps'] = String(mapCount);
+
           const box = new THREE.Box3().setFromObject(model);
           const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
   getLd,
   type LDConnState,
@@ -170,6 +170,29 @@ export function useViewFields(path: string | null): {
   );
 
   return { fields, setField, saving };
+}
+
+/** Returns [ref, inView] — true once the element scrolls near the viewport.
+ *  Latches on so heavy content (3D thumbnails, media) loads lazily, once. */
+export function useInView<T extends HTMLElement>(): [RefObject<T | null>, boolean] {
+  const ref = useRef<T>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || inView) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '150px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [inView]);
+  return [ref, inView];
 }
 
 /** Read a project media file (audio/glb/image) as a data URL for the viewers. */

@@ -34,6 +34,13 @@ async function main(): Promise<void> {
   await win.waitForSelector('header', { timeout: 15000 });
   console.log('window title:', await win.title());
 
+  // Size the window so the viewer pane is visible for screenshots.
+  await app.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows()[0];
+    if (w) w.setSize(1600, 1000);
+  });
+  await win.waitForTimeout(500);
+
   // 1. Connection chip should go live within ~25s.
   const header = win.locator('header');
   const conn = await poll(
@@ -64,13 +71,30 @@ async function main(): Promise<void> {
   // 4. Back to Assets; select the first card and confirm the viewer renders.
   await win.locator('[title="Assets"]').click();
   await win.waitForTimeout(1500);
-  // Click the actual mesh card by name (GhostonGlowCloud) to render the GLB.
-  await win.locator('button', { hasText: 'GhostonGlowCloud' }).first().click().catch(() => {});
-  await win.waitForTimeout(5000);
+  // Select the mesh card to render the GLB in the viewer; wait for texture load.
+  await win.locator('[role="button"]', { hasText: 'GhostOnGlowCloud' }).first().click().catch(() => {});
+  await win.locator('[role="button"]', { hasText: 'Ghost' }).first().click().catch(() => {});
+  await win.waitForTimeout(9000);
   const canvases = await win.locator('canvas').count();
-  const audios = await win.locator('audio').count();
-  console.log('after selecting mesh → canvas elements:', canvases, '| audio elements:', audios);
+  const diag = await win.evaluate(() =>
+    Array.from(document.querySelectorAll('[data-maps]')).map((e) => ({
+      meshes: (e as HTMLElement).dataset['meshes'],
+      maps: (e as HTMLElement).dataset['maps'],
+    })),
+  );
+  console.log('after selecting mesh → canvas elements:', canvases, '| GLB diag:', JSON.stringify(diag));
   await win.screenshot({ path: '/tmp/ld-electron-assets.png' });
+
+  // 5. Audio: an inline card <audio> should load its data URL (no CSP block).
+  await win.waitForTimeout(1500);
+  const audioState = await win.evaluate(async () => {
+    const a = document.querySelector('audio') as HTMLAudioElement | null;
+    if (!a) return 'no audio element';
+    // Wait briefly for metadata.
+    await new Promise((r) => setTimeout(r, 2500));
+    return { hasError: a.error != null, errorCode: a.error?.code ?? null, readyState: a.readyState, src: a.src.slice(0, 20) };
+  });
+  console.log('audio element state:', JSON.stringify(audioState));
 
   console.log('screenshots: /tmp/ld-electron-{designer,preview,assets}.png');
   void viewsText;

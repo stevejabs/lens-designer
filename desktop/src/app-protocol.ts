@@ -21,20 +21,26 @@ const DEFAULT_CSP = [
   "default-src 'self' app:",
   // Bridge connections — WS + HTTP on loopback. Ports may shift if
   // 9229/9230 are taken (Step 11 will surface settings overrides).
-  "connect-src 'self' app: ws://127.0.0.1:* http://127.0.0.1:*",
+  // blob: — three.js GLTFLoader fetches embedded GLB textures via blob URLs.
+  "connect-src 'self' app: blob: ws://127.0.0.1:* http://127.0.0.1:*",
   // Next.js's runtime injects inline scripts for hydration; allow
   // self + inline. unsafe-eval is blocked.
   "script-src 'self' app: 'unsafe-inline'",
   // Google Fonts CSS (fonts.googleapis.com) for the canvas's built-in
   // font preview. unsafe-inline still needed for Next's runtime styles.
   "style-src 'self' app: 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' app: data: http://127.0.0.1:*",
+  // blob: — GLTFLoader decodes embedded glTF textures through blob: image URLs.
+  "img-src 'self' app: data: blob: http://127.0.0.1:*",
   // fonts.gstatic.com — Google-Fonts .woff2 for the built-in faces.
   // http://127.0.0.1:* — the bridge HTTP server serves uploaded
   // .ttf/.otf bytes that Canvas registers via the FontFace API.
   // Without the loopback entry, uploaded-font previews fall back to
   // system fonts even though LS renders them correctly.
   "font-src 'self' app: data: https://fonts.gstatic.com http://127.0.0.1:*",
+  // media-src — the cockpit plays generated audio (wav/mp3) served as data
+  // URLs via ld:file:read; without this they fall back to default-src and
+  // are blocked ("audio failed to decode").
+  "media-src 'self' app: data: blob:",
   "frame-ancestors 'none'",
   "form-action 'none'",
   "base-uri 'self'",
