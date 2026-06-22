@@ -107,6 +107,16 @@ async function main(): Promise<void> {
   const stopVisible = (await win.locator('button:has-text("Stop")').count()) > 0;
   console.log('stop control visible during run:', stopVisible);
 
+  // Let the thread accumulate streamed messages, then check it auto-scrolled.
+  await win.waitForTimeout(6000);
+  const scroll = await win.evaluate(() => {
+    const candidates = Array.from(document.querySelectorAll('aside .overflow-y-auto')) as HTMLElement[];
+    const el = candidates.find((e) => e.scrollHeight > e.clientHeight);
+    if (!el) return 'thread not overflowing yet';
+    return { fromBottom: el.scrollHeight - el.scrollTop - el.clientHeight, scrollable: el.scrollHeight - el.clientHeight };
+  });
+  console.log('thread scroll:', JSON.stringify(scroll));
+
   console.log('screenshots: /tmp/ld-electron-{designer,preview,assets}.png');
   void viewsText;
   await app.close();

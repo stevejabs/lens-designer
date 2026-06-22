@@ -112,6 +112,20 @@ export function AgentPanel() {
     void send(text);
   };
 
+  // Sticky auto-scroll: follow new messages, but don't yank the view if the
+  // user has scrolled up to read earlier in the thread.
+  const threadRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  const onThreadScroll = (): void => {
+    const el = threadRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+  };
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages, running]);
+
   return (
     <aside className="flex flex-col w-[340px] shrink-0 border-l border-subtle bg-bg-0">
       {/* Header */}
@@ -136,7 +150,11 @@ export function AgentPanel() {
       </div>
 
       {/* Thread */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div
+        ref={threadRef}
+        onScroll={onThreadScroll}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+      >
         <div className="flex items-center gap-2 mb-1">
           <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
             Settings Panel
