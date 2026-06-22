@@ -68,6 +68,7 @@ function NewAssetMenu() {
 export function AssetCockpit() {
   const selectedId = useUiStore((s) => s.selectedAssetId);
   const selectAsset = useUiStore((s) => s.selectAsset);
+  const setActiveArtifact = useUiStore((s) => s.setActiveArtifact);
   const [filter, setFilter] = useState<Filter>('all');
   const { assets: allAssets } = useAssets();
 
@@ -121,7 +122,10 @@ export function AssetCockpit() {
                 key={a.id}
                 asset={a}
                 selected={a.id === selectedId}
-                onClick={() => selectAsset(a.id)}
+                onClick={() => {
+                  selectAsset(a.id);
+                  setActiveArtifact({ path: a.id, id: a.id, name: a.name, kind: 'asset' });
+                }}
               />
             ))}
           </div>

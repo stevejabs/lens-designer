@@ -241,4 +241,17 @@ export class McpClient {
       return text as T;
     }
   }
+
+  /** Call a tool and return the raw content blocks (for image/binary results). */
+  async callToolRaw(
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<Array<{ type: string; text?: string; data?: string; mimeType?: string }>> {
+    if (!this.initialized) await this.initialize();
+    const result = await this.rpc<CallToolResult>('tools/call', { name, arguments: args });
+    if (result.isError) {
+      throw new Error(`tool ${name} failed: ${result.content[0]?.text ?? '<no text>'}`);
+    }
+    return result.content as Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+  }
 }

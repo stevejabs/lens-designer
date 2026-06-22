@@ -153,6 +153,25 @@ export interface LDScannedView {
   updatedMs: number;
 }
 
+export type LDFieldKind = 'number' | 'color' | 'string' | 'boolean';
+export interface LDViewField {
+  name: string;
+  kind: LDFieldKind;
+  value: number | number[] | string | boolean;
+}
+export interface LDRecompileResult {
+  ok: boolean;
+  message: string;
+}
+export interface LDArtifactContext {
+  artifactId: string;
+  sessionId: string | null;
+  promptHistory: string[];
+  distilledSummary: string;
+  genParams?: Record<string, string>;
+  updatedAt: string;
+}
+
 export interface LDApi {
   connection: {
     get(): Promise<LDConnState>;
@@ -170,9 +189,32 @@ export interface LDApi {
   };
   views: {
     list(): Promise<LDScannedView[]>;
+    fields(path: string): Promise<LDViewField[]>;
+    setField(req: {
+      path: string;
+      name: string;
+      kind: LDFieldKind;
+      value: number | number[] | string | boolean;
+    }): Promise<LDRecompileResult>;
+  };
+  preview: {
+    capture(): Promise<string | null>;
+  };
+  recompile(): Promise<LDRecompileResult>;
+  context: {
+    get(path: string): Promise<LDArtifactContext | null>;
+  };
+  file: {
+    read(path: string): Promise<string | null>;
   };
   agent: {
-    run(req: { prompt: string; resumeSessionId?: string; cwd?: string }): Promise<{
+    run(req: {
+      prompt: string;
+      resumeSessionId?: string;
+      cwd?: string;
+      artifactPath?: string;
+      artifactId?: string;
+    }): Promise<{
       sessionId: string | null;
       ok: boolean;
     }>;
@@ -207,6 +249,18 @@ const ld: LDApi = {
   },
   views: {
     list: () => ipcRenderer.invoke('ld:views:list') as Promise<LDScannedView[]>,
+    fields: (path) => ipcRenderer.invoke('ld:views:fields', path) as Promise<LDViewField[]>,
+    setField: (req) => ipcRenderer.invoke('ld:views:setField', req) as Promise<LDRecompileResult>,
+  },
+  preview: {
+    capture: () => ipcRenderer.invoke('ld:preview:capture') as Promise<string | null>,
+  },
+  recompile: () => ipcRenderer.invoke('ld:recompile') as Promise<LDRecompileResult>,
+  context: {
+    get: (path) => ipcRenderer.invoke('ld:context:get', path) as Promise<LDArtifactContext | null>,
+  },
+  file: {
+    read: (path) => ipcRenderer.invoke('ld:file:read', path) as Promise<string | null>,
   },
   agent: {
     run: (req) =>

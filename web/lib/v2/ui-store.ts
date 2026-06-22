@@ -17,6 +17,8 @@ interface UiState {
   agentResetNonce: number;
   /** Bumps when an agent run completes, so asset/view lists refresh. */
   artifactNonce: number;
+  /** The artifact (view/asset) the agent thread is scoped to. */
+  activeArtifact: { path: string; id: string; name: string; kind: 'view' | 'asset' } | null;
 
   setMode: (mode: WorkspaceMode) => void;
   setPosture: (posture: Posture) => void;
@@ -34,6 +36,7 @@ interface UiState {
   newAgentThread: () => void;
   /** Signal that project artifacts likely changed (agent run finished). */
   bumpArtifacts: () => void;
+  setActiveArtifact: (a: UiState['activeArtifact']) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -47,6 +50,7 @@ export const useUiStore = create<UiState>((set) => ({
   agentPrefill: null,
   agentResetNonce: 0,
   artifactNonce: 0,
+  activeArtifact: null,
 
   setMode: (mode) => set({ mode }),
   setPosture: (posture) => set({ posture }),
@@ -68,4 +72,5 @@ export const useUiStore = create<UiState>((set) => ({
   newAgentThread: () =>
     set((s) => ({ agentResetNonce: s.agentResetNonce + 1, agentOpen: true })),
   bumpArtifacts: () => set((s) => ({ artifactNonce: s.artifactNonce + 1 })),
+  setActiveArtifact: (activeArtifact) => set({ activeArtifact }),
 }));

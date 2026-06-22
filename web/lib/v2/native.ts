@@ -36,6 +36,25 @@ export interface LDScannedView {
   updatedMs: number;
 }
 
+export type LDFieldKind = 'number' | 'color' | 'string' | 'boolean';
+export interface LDViewField {
+  name: string;
+  kind: LDFieldKind;
+  value: number | number[] | string | boolean;
+}
+export interface LDRecompileResult {
+  ok: boolean;
+  message: string;
+}
+export interface LDArtifactContext {
+  artifactId: string;
+  sessionId: string | null;
+  promptHistory: string[];
+  distilledSummary: string;
+  genParams?: Record<string, string>;
+  updatedAt: string;
+}
+
 export interface LDApi {
   connection: {
     get(): Promise<LDConnState>;
@@ -45,9 +64,28 @@ export interface LDApi {
   project: { dir(): Promise<string | null> };
   scene: { tools(): Promise<{ count: number; sample: string[]; server: unknown }> };
   assets: { list(): Promise<LDScannedAsset[]> };
-  views: { list(): Promise<LDScannedView[]> };
+  views: {
+    list(): Promise<LDScannedView[]>;
+    fields(path: string): Promise<LDViewField[]>;
+    setField(req: {
+      path: string;
+      name: string;
+      kind: LDFieldKind;
+      value: number | number[] | string | boolean;
+    }): Promise<LDRecompileResult>;
+  };
+  preview: { capture(): Promise<string | null> };
+  recompile(): Promise<LDRecompileResult>;
+  context: { get(path: string): Promise<LDArtifactContext | null> };
+  file: { read(path: string): Promise<string | null> };
   agent: {
-    run(req: { prompt: string; resumeSessionId?: string; cwd?: string }): Promise<{
+    run(req: {
+      prompt: string;
+      resumeSessionId?: string;
+      cwd?: string;
+      artifactPath?: string;
+      artifactId?: string;
+    }): Promise<{
       sessionId: string | null;
       ok: boolean;
     }>;

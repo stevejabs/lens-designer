@@ -7,6 +7,8 @@ import {
   type LDAgentEvent,
   type LDScannedAsset,
   type LDScannedView,
+  type LDViewField,
+  type LDFieldKind,
 } from './native';
 import type { AgentMessage, AssetItem, DesignView } from './types';
 import { MOCK_ASSETS, MOCK_VIEWS } from './mock-data';
@@ -94,6 +96,92 @@ export function useViews(): { views: DesignView[]; refresh: () => void } {
   return { views, refresh };
 }
 
+/** Capture the live Lens Studio preview as an image data URL. */
+export function usePreview(): { image: string | null; capturing: boolean; capture: () => void } {
+  const [image, setImage] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+
+  const capture = useCallback(() => {
+    const ld = getLd();
+    if (!ld) return;
+    setCapturing(true);
+    void ld.preview
+      .capture()
+      .then((img) => setImage(img))
+      .finally(() => setCapturing(false));
+  }, []);
+
+  useEffect(() => {
+    capture();
+  }, [capture, artifactNonce]);
+
+  return { image, capturing, capture };
+}
+
+/** Editable design constants parsed from a view's source. */
+export function useViewFields(path: string | null): {
+  fields: LDViewField[];
+  setField: (name: string, kind: LDFieldKind, value: number | number[] | string | boolean) => Promise<void>;
+  saving: boolean;
+} {
+  const [fields, setFields] = useState<LDViewField[]>([]);
+  const [saving, setSaving] = useState(false);
+  const bumpArtifacts = useUiStore((s) => s.bumpArtifacts);
+
+  const refresh = useCallback(() => {
+    const ld = getLd();
+    if (!ld || !path) {
+      setFields([]);
+      return;
+    }
+    void ld.views.fields(path).then(setFields);
+  }, [path]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const setField = useCallback(
+    async (name: string, kind: LDFieldKind, value: number | number[] | string | boolean) => {
+      const ld = getLd();
+      if (!ld || !path) return;
+      // Optimistic local update.
+      setFields((prev) => prev.map((f) => (f.name === name ? { ...f, value } : f)));
+      setSaving(true);
+      try {
+        await ld.views.setField({ path, name, kind, value });
+        bumpArtifacts(); // triggers a preview re-capture
+      } finally {
+        setSaving(false);
+      }
+    },
+    [path, bumpArtifacts],
+  );
+
+  return { fields, setField, saving };
+}
+
+/** Read a project media file (audio/glb/image) as a data URL for the viewers. */
+export function useFileUrl(path: string | null): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const ld = getLd();
+    if (!ld || !path) {
+      setUrl(null);
+      return;
+    }
+    let alive = true;
+    void ld.file.read(path).then((u) => {
+      if (alive) setUrl(u);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [path]);
+  return url;
+}
+
 /** Live LS connection state from the desktop shell (disconnected in browser). */
 export function useConnection(): LDConnState {
   const [state, setState] = useState<LDConnState>({ kind: 'disconnected' });
@@ -124,10 +212,44 @@ export function useAgentThread(initial: AgentMessage[] = []) {
   const [running, setRunning] = useState(false);
   const sessionRef = useRef<string | null>(null);
   const electron = getLd() !== null;
+  const activeArtifact = useUiStore((s) => s.activeArtifact);
+  const artifactRef = useRef(activeArtifact);
+  artifactRef.current = activeArtifact;
 
   const append = useCallback((m: AgentMessage) => {
     setMessages((prev) => [...prev, m]);
   }, []);
+
+  // Load the selected artifact's saved conversation context (per-artifact
+  // threads): seed prior prompts + the distilled summary, and target its
+  // session for resume.
+  const artifactPath = activeArtifact?.path ?? null;
+  useEffect(() => {
+    const ld = getLd();
+    if (!ld || !artifactPath) return;
+    let alive = true;
+    void ld.context.get(artifactPath).then((ctx) => {
+      if (!alive) return;
+      if (!ctx) {
+        sessionRef.current = null;
+        setMessages([]);
+        return;
+      }
+      sessionRef.current = ctx.sessionId;
+      const seeded: AgentMessage[] = ctx.promptHistory.map((p, i) => ({
+        id: `seed-${i}`,
+        role: 'user' as const,
+        text: p,
+      }));
+      if (ctx.distilledSummary) {
+        seeded.push({ id: 'seed-summary', role: 'assistant', text: ctx.distilledSummary, status: 'done' });
+      }
+      setMessages(seeded);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [artifactPath]);
 
   useEffect(() => {
     const ld = getLd();
@@ -184,10 +306,12 @@ export function useAgentThread(initial: AgentMessage[] = []) {
         return;
       }
       setRunning(true);
+      const artifact = artifactRef.current;
       try {
         await ld.agent.run({
           prompt: trimmed,
           ...(sessionRef.current ? { resumeSessionId: sessionRef.current } : {}),
+          ...(artifact ? { artifactPath: artifact.path, artifactId: artifact.id } : {}),
         });
       } catch (err) {
         append({ id: nextId(), role: 'assistant', text: `⚠ ${(err as Error).message}`, status: 'error' });

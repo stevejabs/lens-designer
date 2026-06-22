@@ -1,10 +1,12 @@
 'use client';
 
-import { MousePointer2, Hand, Frame, ZoomIn, Eye, Maximize, RefreshCw } from 'lucide-react';
+import { MousePointer2, Hand, Frame, ZoomIn, Eye, Maximize, RefreshCw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
+import { usePreview } from '@/lib/v2/hooks';
+import { getLd } from '@/lib/v2/native';
 import { Pill } from '../ui/Primitives';
 
-function CanvasToolbar() {
+function CanvasToolbar({ onResync, capturing }: { onResync: () => void; capturing: boolean }) {
   const tools = [
     { icon: MousePointer2, label: 'Select', active: true },
     { icon: Hand, label: 'Pan' },
@@ -25,8 +27,12 @@ function CanvasToolbar() {
         </button>
       ))}
       <div className="w-px h-5 mx-1 bg-border-subtle" />
-      <button title="Re-sync from scene" className="flex items-center justify-center w-8 h-8 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors">
-        <RefreshCw className="w-4 h-4" />
+      <button
+        onClick={onResync}
+        title="Re-capture live preview"
+        className="flex items-center justify-center w-8 h-8 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors"
+      >
+        {capturing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
       </button>
     </div>
   );
@@ -91,9 +97,12 @@ function PanelPreview() {
 }
 
 export function DesignerCanvas() {
+  const { image, capturing, capture } = usePreview();
+  const isElectron = getLd() !== null;
+
   return (
     <div className="relative flex-1 min-h-0 canvas-dots overflow-hidden">
-      <CanvasToolbar />
+      <CanvasToolbar onResync={capture} capturing={capturing} />
 
       {/* status chips */}
       <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
@@ -109,9 +118,39 @@ export function DesignerCanvas() {
         </button>
       </div>
 
-      {/* stage */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <PanelPreview />
+      {/* stage — real LS preview when connected, mock panel in the browser */}
+      <div className="absolute inset-0 flex items-center justify-center p-12">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt="Live Lens Studio preview"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-lg animate-fade-in"
+            style={{ boxShadow: '0 24px 80px -24px rgba(34,211,238,0.25)' }}
+          />
+        ) : isElectron ? (
+          <div className="flex flex-col items-center gap-3 text-text-tertiary">
+            {capturing ? (
+              <>
+                <Loader2 className="w-6 h-6 animate-spin text-accent-400" />
+                <span className="text-sm">Capturing live preview…</span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-6 h-6" />
+                <span className="text-sm">No preview yet — open a view in Lens Studio</span>
+                <button
+                  onClick={capture}
+                  className="text-xs px-3 h-7 rounded-md bg-bg-3 text-text-secondary hover:text-text-primary"
+                >
+                  Capture preview
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <PanelPreview />
+        )}
       </div>
 
       {/* bottom status bar */}

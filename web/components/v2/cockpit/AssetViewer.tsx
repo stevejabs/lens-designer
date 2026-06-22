@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Play,
   Pause,
@@ -12,14 +12,18 @@ import {
   Box,
 } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
+import { useFileUrl } from '@/lib/v2/hooks';
 import type { AssetItem } from '@/lib/v2/types';
 import { Button, Pill, SectionLabel } from '../ui/Primitives';
+import { GLBViewer } from './GLBViewer';
 
 /* A stylized 3D stage stand-in: gridded floor, soft glow, slowly spinning
    wireframe solid. Real GLB rendering (three.js) drops in here later. */
-function MeshStage({ asset }: { asset: AssetItem }) {
+function MeshStage({ asset, url }: { asset: AssetItem; url: string | null }) {
   return (
     <div className="relative flex items-center justify-center flex-1 rounded-xl overflow-hidden bg-bg-canvas border border-subtle">
+      {/* Real GLB render when the file is available. */}
+      {url && <GLBViewer dataUrl={url} />}
       {/* floor grid */}
       <div
         className="absolute inset-x-0 bottom-0 h-1/2 opacity-30"
@@ -35,10 +39,12 @@ function MeshStage({ asset }: { asset: AssetItem }) {
       />
       {/* glow */}
       <div className="absolute w-48 h-48 rounded-full blur-3xl opacity-30 accent-bg" />
-      {/* spinning solid */}
-      <div className="relative" style={{ animation: 'spin-slow 14s linear infinite' }}>
-        <Box className="w-24 h-24 text-accent-300" strokeWidth={1} />
-      </div>
+      {/* spinning placeholder solid — only when there's no real model to show */}
+      {!url && (
+        <div className="relative" style={{ animation: 'spin-slow 14s linear infinite' }}>
+          <Box className="w-24 h-24 text-accent-300" strokeWidth={1} />
+        </div>
+      )}
 
       <div className="absolute top-3 left-3">
         <Pill tone="accent">
@@ -60,17 +66,55 @@ function MeshStage({ asset }: { asset: AssetItem }) {
   );
 }
 
-/* Static waveform bars + transport. Real WebAudio analysis replaces the bars. */
-function AudioStage({ asset }: { asset: AssetItem }) {
+function fmtTime(s: number): string {
+  if (!Number.isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+/* Real audio transport (HTMLAudioElement) with a static waveform skin. */
+function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
   const bars = 64;
+
+  useEffect(() => {
+    setPlaying(false);
+    setProgress(0);
+  }, [url]);
+
+  const toggle = (): void => {
+    const a = audioRef.current;
+    if (!a || !url) return;
+    if (a.paused) {
+      void a.play();
+      setPlaying(true);
+    } else {
+      a.pause();
+      setPlaying(false);
+    }
+  };
+
   return (
     <div className="relative flex flex-col flex-1 rounded-xl overflow-hidden bg-bg-canvas border border-subtle">
+      {url && (
+        <audio
+          ref={audioRef}
+          src={url}
+          onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+          onEnded={() => setPlaying(false)}
+        />
+      )}
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="flex items-end gap-[3px] h-28 w-full max-w-md">
           {Array.from({ length: bars }).map((_, i) => {
             const h = 16 + Math.abs(Math.sin(i * 0.5) * Math.cos(i * 0.17)) * 84;
-            const active = playing && i < bars * 0.42;
+            const frac = duration ? progress / duration : 0;
+            const active = i / bars < frac;
             return (
               <span
                 key={i}
@@ -83,16 +127,20 @@ function AudioStage({ asset }: { asset: AssetItem }) {
       </div>
       <div className="flex items-center gap-3 px-4 h-12 border-t border-subtle">
         <button
-          onClick={() => setPlaying((p) => !p)}
-          className="flex items-center justify-center w-9 h-9 rounded-full accent-bg text-text-inverse hover:brightness-110 transition-all"
+          onClick={toggle}
+          disabled={!url}
+          className="flex items-center justify-center w-9 h-9 rounded-full accent-bg text-text-inverse hover:brightness-110 transition-all disabled:opacity-40"
         >
           {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>
         <div className="flex-1 h-1 rounded-full bg-bg-3 overflow-hidden">
-          <div className={cn('h-full accent-bg transition-all duration-500', playing ? 'w-2/5' : 'w-0')} />
+          <div
+            className="h-full accent-bg"
+            style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
+          />
         </div>
         <span className="font-num text-2xs text-text-tertiary">
-          {asset.meta?.length ?? '0:00'}
+          {duration ? `${fmtTime(progress)} / ${fmtTime(duration)}` : (asset.meta?.length ?? '0:00')}
         </span>
       </div>
     </div>
@@ -100,6 +148,9 @@ function AudioStage({ asset }: { asset: AssetItem }) {
 }
 
 export function AssetViewer({ asset }: { asset: AssetItem | null }) {
+  // Real file bytes for the selected asset (null in the browser / for mock ids).
+  const url = useFileUrl(asset?.id ?? null);
+
   if (!asset) {
     return (
       <div className="flex-1 flex items-center justify-center text-text-tertiary text-sm">
@@ -127,7 +178,7 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
       </div>
 
       {/* stage */}
-      {asset.kind === 'mesh' ? <MeshStage asset={asset} /> : <AudioStage asset={asset} />}
+      {asset.kind === 'mesh' ? <MeshStage asset={asset} url={url} /> : <AudioStage asset={asset} url={url} />}
 
       {/* meta */}
       {asset.meta && (

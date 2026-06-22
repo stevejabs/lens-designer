@@ -36,6 +36,7 @@ export function DesignerLeft() {
   const selectedViewId = useUiStore((s) => s.selectedViewId);
   const selectView = useUiStore((s) => s.selectView);
   const promptAgent = useUiStore((s) => s.promptAgent);
+  const setActiveArtifact = useUiStore((s) => s.setActiveArtifact);
   const { views, refresh } = useViews();
 
   return (
@@ -70,7 +71,10 @@ export function DesignerLeft() {
           return (
             <button
               key={v.id}
-              onClick={() => selectView(v.id)}
+              onClick={() => {
+                selectView(v.id);
+                setActiveArtifact({ path: v.id, id: v.id, name: v.name, kind: 'view' });
+              }}
               className={cn(
                 'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors text-left',
                 active ? 'bg-bg-3 text-text-primary' : 'text-text-secondary hover:bg-bg-2 hover:text-text-primary',
