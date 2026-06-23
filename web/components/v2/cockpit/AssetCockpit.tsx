@@ -4,16 +4,17 @@ import { useState } from 'react';
 import { Box, Music, AudioWaveform, Plus, Search, Sparkles, Upload } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
+import { useAgentStore } from '@/lib/v2/agent-store';
 import { cn } from '@/lib/v2/cn';
 import { useAssets } from '@/lib/v2/hooks';
 import type { AssetKind } from '@/lib/v2/types';
 import { AssetCard } from './AssetCard';
 import { AssetViewer } from './AssetViewer';
 
-const NEW_OPTIONS: { kind: AssetKind; label: string; icon: LucideIcon; template: string }[] = [
-  { kind: 'mesh', label: '3D Asset', icon: Box, template: 'Generate a 3D asset: ' },
-  { kind: 'music', label: 'Music', icon: Music, template: 'Generate music: ' },
-  { kind: 'sfx', label: 'SFX', icon: AudioWaveform, template: 'Generate a sound effect: ' },
+const NEW_OPTIONS: { kind: AssetKind; label: string; icon: LucideIcon }[] = [
+  { kind: 'mesh', label: '3D Asset', icon: Box },
+  { kind: 'music', label: 'Music', icon: Music },
+  { kind: 'sfx', label: 'SFX', icon: AudioWaveform },
 ];
 
 type Filter = 'all' | AssetKind;
@@ -26,7 +27,8 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 function NewAssetMenu() {
   const [open, setOpen] = useState(false);
-  const promptAgent = useUiStore((s) => s.promptAgent);
+  const openCreate = useAgentStore((s) => s.openCreate);
+  const setAgentOpen = useUiStore((s) => s.setAgentOpen);
   return (
     <div className="relative">
       <button
@@ -45,7 +47,8 @@ function NewAssetMenu() {
                 key={o.kind}
                 onClick={() => {
                   setOpen(false);
-                  promptAgent(o.template, true);
+                  setAgentOpen(true);
+                  openCreate(o.kind);
                 }}
                 className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-text-secondary hover:text-text-primary hover:bg-bg-3 transition-colors"
               >

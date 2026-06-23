@@ -46,6 +46,25 @@ export async function writeContext(
   await writeFile(sidecarPath(artifactPath), JSON.stringify(full, null, 2), 'utf8');
 }
 
+/** Record a freshly-created artifact's provenance: the prompt it was born
+ *  from and the CLAD skill/kind that made it (so a later refine reuses the
+ *  exact tool). Overwrites any prior sidecar at this path. */
+export async function recordCreation(
+  artifactPath: string,
+  artifactId: string,
+  prompt: string,
+  summary: string,
+  sessionId: string | null,
+  genParams: Record<string, string>,
+  nowIso: string,
+): Promise<void> {
+  await writeContext(
+    artifactPath,
+    { artifactId, sessionId, promptHistory: [prompt], distilledSummary: summary, genParams },
+    nowIso,
+  );
+}
+
 /** Append a prompt + summary onto an existing (or new) sidecar. */
 export async function appendTurn(
   artifactPath: string,

@@ -21,10 +21,10 @@ export interface ScannedAsset {
   prompt?: string;
 }
 
-const SKIP_DIRS = new Set(['Cache', 'node_modules', '.git', 'Logs', 'Output']);
+const SKIP_DIRS = new Set(['Cache', 'node_modules', '.git', 'Logs', 'Output', '.lensdesigner']);
 const MAX_DEPTH = 6;
 
-function kindFor(file: string): AssetKind | null {
+export function kindFor(file: string): AssetKind | null {
   const ext = extname(file).toLowerCase();
   if (ext === '.glb' || ext === '.gltf') return 'mesh';
   if (ext === '.wav' || ext === '.mp3' || ext === '.ogg') {
@@ -52,11 +52,16 @@ async function walk(dir: string, depth: number, out: string[]): Promise<void> {
   }
 }
 
+/** All cockpit-visible asset file paths under `projectDir/Assets`. */
+export async function listAssetFiles(projectDir: string): Promise<string[]> {
+  const files: string[] = [];
+  await walk(join(projectDir, 'Assets'), 0, files);
+  return files;
+}
+
 /** Scan `projectDir/Assets` for cockpit-visible assets, newest first. */
 export async function scanAssets(projectDir: string): Promise<ScannedAsset[]> {
-  const assetsDir = join(projectDir, 'Assets');
-  const files: string[] = [];
-  await walk(assetsDir, 0, files);
+  const files = await listAssetFiles(projectDir);
 
   const results = await Promise.all(
     files.map(async (path): Promise<ScannedAsset | null> => {

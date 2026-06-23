@@ -35,6 +35,11 @@ export class CodexRunner extends EventEmitter implements AgentAdapter {
     if (opts.resumeSessionId) args.push('--session', opts.resumeSessionId);
     args.push(opts.prompt);
 
+    const emit = (e: AgentEvent): void => {
+      opts.onEvent?.(e);
+      this.emit('event', e);
+    };
+
     let child: ChildProcessByStdio<null, Readable, Readable>;
     try {
       child = spawn(this.bin, args, {
@@ -43,7 +48,7 @@ export class CodexRunner extends EventEmitter implements AgentAdapter {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
-      this.emit('event', { kind: 'error', message: `failed to launch ${this.bin}: ${(err as Error).message}` });
+      emit({ kind: 'error', message: `failed to launch ${this.bin}: ${(err as Error).message}` });
       return { done: Promise.resolve({ sessionId: null, ok: false }), cancel: () => {} };
     }
 
@@ -64,7 +69,7 @@ export class CodexRunner extends EventEmitter implements AgentAdapter {
       if (found?.sessionId) sessionId = found.sessionId;
       for (const e of found?.events ?? []) {
         if (e.kind === 'result') ok = e.ok;
-        this.emit('event', e);
+        emit(e);
       }
     };
 
@@ -77,10 +82,10 @@ export class CodexRunner extends EventEmitter implements AgentAdapter {
       });
       child.stderr.on('data', (chunk: Buffer) => {
         const text = chunk.toString('utf8').trim();
-        if (text) this.emit('event', { kind: 'error', message: text.slice(0, 400) });
+        if (text) emit({ kind: 'error', message: text.slice(0, 400) });
       });
       child.on('error', (err) => {
-        this.emit('event', { kind: 'error', message: `${this.bin}: ${err.message}` });
+        emit({ kind: 'error', message: `${this.bin}: ${err.message}` });
         res({ sessionId, ok: false });
       });
       child.on('close', () => {

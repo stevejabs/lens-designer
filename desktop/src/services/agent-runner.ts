@@ -27,6 +27,9 @@ export interface RunOptions {
   permissionMode?: 'acceptEdits' | 'plan' | 'default';
   allowedTools?: string[];
   maxTurns?: number;
+  /** Per-run event sink. Lets the orchestrator demux concurrent runs (the
+   *  shared `event` emitter interleaves events from every active run). */
+  onEvent?: (e: AgentEvent) => void;
 }
 
 export interface AgentRunHandle {
@@ -95,6 +98,12 @@ export class AgentRunner extends EventEmitter implements AgentAdapter {
     if (opts.resumeSessionId) args.push('--resume', opts.resumeSessionId);
     if (opts.maxTurns) args.push('--max-turns', String(opts.maxTurns));
 
+    // Fan every event to the shared bus AND this run's private sink.
+    const emit = (e: AgentEvent): void => {
+      opts.onEvent?.(e);
+      this.emit('event', e);
+    };
+
     let child: ChildProcessByStdio<null, Readable, Readable>;
     try {
       child = spawn(this.bin, args, {
@@ -103,7 +112,7 @@ export class AgentRunner extends EventEmitter implements AgentAdapter {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
-      this.emit('event', { kind: 'error', message: `failed to launch ${this.bin}: ${(err as Error).message}` });
+      emit({ kind: 'error', message: `failed to launch ${this.bin}: ${(err as Error).message}` });
       return { done: Promise.resolve({ sessionId: null, ok: false }), cancel: () => {} };
     }
 
@@ -125,7 +134,7 @@ export class AgentRunner extends EventEmitter implements AgentAdapter {
         if (found?.sessionId) sessionId = found.sessionId;
         for (const e of found?.events ?? []) {
           if (e.kind === 'result') ok = e.ok;
-          this.emit('event', e);
+          emit(e);
         }
       };
 
@@ -137,10 +146,10 @@ export class AgentRunner extends EventEmitter implements AgentAdapter {
       });
       child.stderr.on('data', (chunk: Buffer) => {
         const text = chunk.toString('utf8').trim();
-        if (text) this.emit('event', { kind: 'error', message: text.slice(0, 400) });
+        if (text) emit({ kind: 'error', message: text.slice(0, 400) });
       });
       child.on('error', (err) => {
-        this.emit('event', { kind: 'error', message: `${this.bin}: ${err.message}` });
+        emit({ kind: 'error', message: `${this.bin}: ${err.message}` });
         res({ sessionId, ok: false });
       });
       child.on('close', () => {

@@ -7,13 +7,45 @@ export type LDConnState =
   | { kind: 'connecting' }
   | { kind: 'connected'; server: string; version: string; port: number; clad: boolean };
 
-export type LDAgentEvent =
+export type LDAgentEventBase =
   | { kind: 'session'; sessionId: string }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; tool: string; status: 'running' }
   | { kind: 'tool-result'; tool: string; ok: boolean }
   | { kind: 'result'; ok: boolean; text: string; costUsd: number | null; sessionId: string | null }
   | { kind: 'error'; message: string };
+
+export type LDAgentEvent = LDAgentEventBase & { jobId: string };
+
+export type LDJobStatus = 'running' | 'done' | 'error' | 'cancelled';
+export type LDJobKind = 'mesh' | 'music' | 'sfx' | 'ui' | 'code';
+export type LDAssetGenKind = 'mesh' | 'music' | 'sfx';
+
+export interface LDJobMeta {
+  jobId: string;
+  status: LDJobStatus;
+  artifactPath: string | null;
+  artifactId: string | null;
+  note: string | null;
+}
+
+export interface LDJobRecord {
+  id: string;
+  kind: LDJobKind;
+  mode: 'create' | 'refine' | 'chat';
+  title: string;
+  artifactPath: string | null;
+  artifactId: string | null;
+  sessionId: string | null;
+  status: LDJobStatus;
+  startedMs: number;
+}
+
+export interface LDVersionEntry {
+  id: string;
+  createdMs: number;
+  sizeBytes: number;
+}
 
 export interface LDScannedAsset {
   id: string;
@@ -78,20 +110,32 @@ export interface LDApi {
   recompile(): Promise<LDRecompileResult>;
   context: { get(path: string): Promise<LDArtifactContext | null> };
   file: { read(path: string): Promise<string | null> };
+  versions: {
+    list(path: string): Promise<LDVersionEntry[]>;
+    restore(req: { path: string; versionId: string }): Promise<{ ok: boolean; message: string }>;
+  };
+  jobs: {
+    list(): Promise<LDJobRecord[]>;
+    cancel(jobId: string): Promise<void>;
+  };
+  asset: {
+    create(req: { kind: LDAssetGenKind; userText: string }): Promise<{ jobId: string; title: string }>;
+    refine(req: { artifactPath: string; userText: string }): Promise<{ jobId: string }>;
+  };
   agent: {
     run(req: {
       prompt: string;
+      kind?: LDJobKind;
+      mode?: 'create' | 'refine' | 'chat';
+      title?: string;
       resumeSessionId?: string;
-      cwd?: string;
       artifactPath?: string;
       artifactId?: string;
-    }): Promise<{
-      sessionId: string | null;
-      ok: boolean;
-    }>;
-    cancel(): Promise<void>;
+    }): Promise<{ jobId: string }>;
+    cancel(jobId?: string): Promise<void>;
     cli(): Promise<string>;
     onEvent(handler: (e: LDAgentEvent) => void): () => void;
+    onJobMeta(handler: (m: LDJobMeta) => void): () => void;
   };
 }
 

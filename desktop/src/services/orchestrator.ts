@@ -1,38 +1,55 @@
-// orchestrator.ts — the heart of the two-channel architecture.
+// orchestrator.ts — the two-channel core, now job-based.
 //
-// Holds the direct LS MCP connection and the agent runner, and serializes all
-// scene-mutating work through ONE command queue (single-writer discipline):
-// a direct write never overlaps an agent turn, and after each agent turn the
-// orchestrator can re-sync its model from the scene. Reads can run anytime.
+// Holds the direct LS MCP connection and the agent runner. Multiple agent
+// jobs run CONCURRENTLY (the user generates a mesh, an SFX and a UI at the
+// same time and watches all three). The only thing serialized is work that
+// mutates the live scene: scene-mutating jobs and direct MCP writes take a
+// single scene-write lease so two writers never race the same scene. Direct
+// reads (preview capture, listings) run anytime.
+//
+// Every job's streamed events are tagged with its jobId so the renderer can
+// demux them into separate threads.
 
 import { EventEmitter } from 'node:events';
 import { LsConnection, type ConnState } from './ls-connection.js';
 import type { AgentAdapter, AgentEvent } from './agent-runner.js';
 import { createAgentAdapter } from './agent-factory.js';
+import { Lease, nextJobId, type JobKind, type JobMode, type JobRecord, type JobStatus } from './jobs.js';
 
-export interface AgentTurnRequest {
+export interface JobRequest {
   prompt: string;
   cwd: string;
+  kind: JobKind;
+  mode: JobMode;
+  title: string;
+  artifactPath?: string | null;
+  artifactId?: string | null;
   resumeSessionId?: string;
 }
 
+export type TaggedAgentEvent = AgentEvent & { jobId: string };
+
 export interface OrchestratorEvents {
   'connection': (s: ConnState) => void;
-  'agent-event': (e: AgentEvent) => void;
+  'agent-event': (e: TaggedAgentEvent) => void;
+}
+
+/** Only scene-mutating jobs need the scene-write lease. Asset/file generation
+ *  (mesh/music/sfx) and plain code edits never touch the live scene graph. */
+function mutatesScene(kind: JobKind): boolean {
+  return kind === 'ui';
 }
 
 export class Orchestrator extends EventEmitter {
   readonly connection = new LsConnection();
   private readonly agent: AgentAdapter = createAgentAdapter();
-  /** Promise chain enforcing single-writer ordering across the two channels. */
-  private queue: Promise<unknown> = Promise.resolve();
-  private agentBusy = false;
-  private activeCancel: (() => void) | null = null;
+  /** Serializes only scene-mutating work (UI jobs + direct writes). */
+  private readonly sceneLease = new Lease();
+  private readonly jobs = new Map<string, { record: JobRecord; cancel: () => void }>();
 
   constructor() {
     super();
     this.connection.on('status', (s) => this.emit('connection', s));
-    this.agent.on('event', (e: AgentEvent) => this.emit('agent-event', e));
   }
 
   start(): void {
@@ -40,7 +57,7 @@ export class Orchestrator extends EventEmitter {
   }
 
   stop(): void {
-    this.activeCancel?.();
+    for (const { cancel } of this.jobs.values()) cancel();
     this.connection.stop();
   }
 
@@ -57,52 +74,94 @@ export class Orchestrator extends EventEmitter {
     this.connection.reconnect();
   }
 
-  /** Enqueue an exclusive agent turn. Streams 'agent-event's as it runs. */
-  runAgentTurn(req: AgentTurnRequest): Promise<{ sessionId: string | null; ok: boolean }> {
-    return this.enqueue(async () => {
-      this.agentBusy = true;
-      try {
-        const handle = this.agent.run({
-          prompt: req.prompt,
-          cwd: req.cwd,
-          ...(req.resumeSessionId ? { resumeSessionId: req.resumeSessionId } : {}),
-        });
-        this.activeCancel = handle.cancel;
-        const result = await handle.done;
-        // Post-turn re-sync hook: the agent may have changed the scene.
-        // (Designer model re-sync lands with the WYSIWYG phase.)
-        return result;
-      } finally {
-        this.agentBusy = false;
-        this.activeCancel = null;
+  listJobs(): JobRecord[] {
+    return [...this.jobs.values()].map((j) => j.record);
+  }
+
+  /** Start an agent job. Returns immediately with its id + a done promise;
+   *  events stream as tagged 'agent-event's. Concurrent with other jobs. */
+  startJob(req: JobRequest): { jobId: string; done: Promise<{ sessionId: string | null; ok: boolean }> } {
+    const jobId = nextJobId();
+    const record: JobRecord = {
+      id: jobId,
+      kind: req.kind,
+      mode: req.mode,
+      title: req.title,
+      artifactPath: req.artifactPath ?? null,
+      artifactId: req.artifactId ?? null,
+      sessionId: req.resumeSessionId ?? null,
+      status: 'running',
+      startedMs: Date.now(),
+    };
+
+    const emit = (e: AgentEvent): void => {
+      if (e.kind === 'session' || e.kind === 'result') {
+        const sid = e.kind === 'session' ? e.sessionId : e.sessionId;
+        if (sid) record.sessionId = sid;
       }
-    });
+      this.emit('agent-event', { ...e, jobId });
+    };
+
+    // The work itself: spawn the CLI run and await it.
+    const runOnce = (): Promise<{ sessionId: string | null; ok: boolean }> => {
+      const handle = this.agent.run({
+        prompt: req.prompt,
+        cwd: req.cwd,
+        onEvent: emit,
+        ...(req.resumeSessionId ? { resumeSessionId: req.resumeSessionId } : {}),
+      });
+      this.jobs.set(jobId, {
+        record,
+        cancel: () => {
+          handle.cancel();
+          if (record.status === 'running') record.status = 'cancelled';
+        },
+      });
+      return handle.done;
+    };
+
+    // Scene-mutating jobs go through the lease; asset jobs run free.
+    const work = mutatesScene(req.kind) ? this.sceneLease.acquire(runOnce) : runOnce();
+
+    const done = work
+      .then((res): { sessionId: string | null; ok: boolean } => {
+        if (record.status === 'running') record.status = res.ok ? 'done' : 'error';
+        if (res.sessionId) record.sessionId = res.sessionId;
+        return res;
+      })
+      .catch((): { sessionId: string | null; ok: boolean } => {
+        if (record.status === 'running') record.status = 'error';
+        return { sessionId: record.sessionId, ok: false };
+      });
+
+    return { jobId, done };
   }
 
-  cancelAgent(): void {
-    this.activeCancel?.();
+  setJobStatus(jobId: string, status: JobStatus): void {
+    const j = this.jobs.get(jobId);
+    if (j) j.record.status = status;
   }
 
-  /** Run a deterministic MCP op, serialized behind any in-flight agent turn. */
-  runDirect<T>(fn: (client: import('./mcp-client.js').McpClient) => Promise<T>): Promise<T> {
-    return this.enqueue(async () => {
+  setJobArtifact(jobId: string, artifactPath: string | null, artifactId: string | null): void {
+    const j = this.jobs.get(jobId);
+    if (j) {
+      j.record.artifactPath = artifactPath;
+      j.record.artifactId = artifactId;
+    }
+  }
+
+  cancelJob(jobId: string): void {
+    this.jobs.get(jobId)?.cancel();
+  }
+
+  /** Run a deterministic MCP op. Reads run immediately; writes take the
+   *  scene-write lease so they never overlap a scene-mutating agent job. */
+  runDirect<T>(fn: (client: import('./mcp-client.js').McpClient) => Promise<T>, opts?: { write?: boolean }): Promise<T> {
+    const exec = (): Promise<T> => {
       const client = this.connection.getClient();
       if (!client) throw new Error('not connected to Lens Studio');
       return fn(client);
-    });
-  }
-
-  get isAgentBusy(): boolean {
-    return this.agentBusy;
-  }
-
-  private enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(task, task);
-    // Keep the chain alive even if a task throws.
-    this.queue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
+    };
+    return opts?.write ? this.sceneLease.acquire(exec) : exec();
   }
 }

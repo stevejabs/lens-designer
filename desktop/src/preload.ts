@@ -124,13 +124,44 @@ export type LDConnState =
   | { kind: 'connecting' }
   | { kind: 'connected'; server: string; version: string; port: number; clad: boolean };
 
-export type LDAgentEvent =
+export type LDAgentEventBase =
   | { kind: 'session'; sessionId: string }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; tool: string; status: 'running' }
   | { kind: 'tool-result'; tool: string; ok: boolean }
   | { kind: 'result'; ok: boolean; text: string; costUsd: number | null; sessionId: string | null }
   | { kind: 'error'; message: string };
+
+/** Streamed event, tagged with the job it belongs to (renderer demuxes). */
+export type LDAgentEvent = LDAgentEventBase & { jobId: string };
+
+export type LDJobStatus = 'running' | 'done' | 'error' | 'cancelled';
+
+export interface LDJobMeta {
+  jobId: string;
+  status: LDJobStatus;
+  artifactPath: string | null;
+  artifactId: string | null;
+  note: string | null;
+}
+
+export interface LDJobRecord {
+  id: string;
+  kind: 'mesh' | 'music' | 'sfx' | 'ui' | 'code';
+  mode: 'create' | 'refine' | 'chat';
+  title: string;
+  artifactPath: string | null;
+  artifactId: string | null;
+  sessionId: string | null;
+  status: LDJobStatus;
+  startedMs: number;
+}
+
+export interface LDVersionEntry {
+  id: string;
+  createdMs: number;
+  sizeBytes: number;
+}
 
 export interface LDScannedAsset {
   id: string;
@@ -207,20 +238,33 @@ export interface LDApi {
   file: {
     read(path: string): Promise<string | null>;
   };
+  versions: {
+    list(path: string): Promise<LDVersionEntry[]>;
+    restore(req: { path: string; versionId: string }): Promise<{ ok: boolean; message: string }>;
+  };
+  jobs: {
+    list(): Promise<LDJobRecord[]>;
+    cancel(jobId: string): Promise<void>;
+  };
+  asset: {
+    create(req: { kind: 'mesh' | 'music' | 'sfx'; userText: string }): Promise<{ jobId: string; title: string }>;
+    refine(req: { artifactPath: string; userText: string }): Promise<{ jobId: string }>;
+  };
   agent: {
+    /** Generic chat turn on a thread; returns the job it spawned. */
     run(req: {
       prompt: string;
+      kind?: 'mesh' | 'music' | 'sfx' | 'ui' | 'code';
+      mode?: 'create' | 'refine' | 'chat';
+      title?: string;
       resumeSessionId?: string;
-      cwd?: string;
       artifactPath?: string;
       artifactId?: string;
-    }): Promise<{
-      sessionId: string | null;
-      ok: boolean;
-    }>;
-    cancel(): Promise<void>;
+    }): Promise<{ jobId: string }>;
+    cancel(jobId?: string): Promise<void>;
     cli(): Promise<string>;
     onEvent(handler: (e: LDAgentEvent) => void): () => void;
+    onJobMeta(handler: (m: LDJobMeta) => void): () => void;
   };
 }
 
@@ -263,15 +307,32 @@ const ld: LDApi = {
   file: {
     read: (path) => ipcRenderer.invoke('ld:file:read', path) as Promise<string | null>,
   },
+  versions: {
+    list: (path) => ipcRenderer.invoke('ld:versions:list', path) as Promise<LDVersionEntry[]>,
+    restore: (req) =>
+      ipcRenderer.invoke('ld:versions:restore', req) as Promise<{ ok: boolean; message: string }>,
+  },
+  jobs: {
+    list: () => ipcRenderer.invoke('ld:jobs:list') as Promise<LDJobRecord[]>,
+    cancel: (jobId) => ipcRenderer.invoke('ld:jobs:cancel', jobId) as Promise<void>,
+  },
+  asset: {
+    create: (req) => ipcRenderer.invoke('ld:asset:create', req) as Promise<{ jobId: string; title: string }>,
+    refine: (req) => ipcRenderer.invoke('ld:asset:refine', req) as Promise<{ jobId: string }>,
+  },
   agent: {
-    run: (req) =>
-      ipcRenderer.invoke('ld:agent:run', req) as Promise<{ sessionId: string | null; ok: boolean }>,
-    cancel: () => ipcRenderer.invoke('ld:agent:cancel') as Promise<void>,
+    run: (req) => ipcRenderer.invoke('ld:agent:run', req) as Promise<{ jobId: string }>,
+    cancel: (jobId) => ipcRenderer.invoke('ld:agent:cancel', jobId) as Promise<void>,
     cli: () => ipcRenderer.invoke('ld:agent:cli') as Promise<string>,
     onEvent: (handler) => {
       const listener = (_e: Electron.IpcRendererEvent, ev: LDAgentEvent): void => handler(ev);
       ipcRenderer.on('ld:agent-event', listener);
       return () => ipcRenderer.removeListener('ld:agent-event', listener);
+    },
+    onJobMeta: (handler) => {
+      const listener = (_e: Electron.IpcRendererEvent, m: LDJobMeta): void => handler(m);
+      ipcRenderer.on('ld:job-meta', listener);
+      return () => ipcRenderer.removeListener('ld:job-meta', listener);
     },
   },
 };

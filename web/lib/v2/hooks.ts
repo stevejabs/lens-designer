@@ -10,7 +10,7 @@ import {
   type LDViewField,
   type LDFieldKind,
 } from './native';
-import type { AgentMessage, AssetItem, DesignView } from './types';
+import type { AssetItem, DesignView } from './types';
 import { MOCK_ASSETS, MOCK_VIEWS } from './mock-data';
 import { useUiStore } from './ui-store';
 
@@ -236,180 +236,40 @@ export function useConnection(): LDConnState {
   return state;
 }
 
-let msgSeq = 0;
-const nextId = (): string => `m${++msgSeq}`;
+/** An asset's version history + a restore action (rollback). */
+export function useVersions(path: string | null): {
+  versions: { id: string; createdMs: number; sizeBytes: number }[];
+  restore: (versionId: string) => Promise<void>;
+  refresh: () => void;
+} {
+  const [versions, setVersions] = useState<{ id: string; createdMs: number; sizeBytes: number }[]>([]);
+  const bumpArtifacts = useUiStore((s) => s.bumpArtifacts);
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
 
-/** An agent thread backed by the real `claude` CLI when running in Electron. */
-export function useAgentThread(initial: AgentMessage[] = []) {
-  const [messages, setMessages] = useState<AgentMessage[]>(initial);
-  const [running, setRunning] = useState(false);
-  const sessionRef = useRef<string | null>(null);
-  const electron = getLd() !== null;
-  const activeArtifact = useUiStore((s) => s.activeArtifact);
-  const artifactRef = useRef(activeArtifact);
-  artifactRef.current = activeArtifact;
-  // Holds the latest send() so the context-load effect can fire a queued
-  // "Refine" prompt after the artifact's session is set (avoids ordering races).
-  const sendRef = useRef<(p: string) => void>(() => {});
-
-  const append = useCallback((m: AgentMessage) => {
-    setMessages((prev) => [...prev, m]);
-  }, []);
-
-  // Load the selected artifact's saved conversation context (per-artifact
-  // threads): seed prior prompts + the distilled summary, and target its
-  // session for resume.
-  const artifactPath = activeArtifact?.path ?? null;
-  useEffect(() => {
+  const refresh = useCallback(() => {
     const ld = getLd();
-    if (!ld || !artifactPath) return;
-    // If a refine prompt is queued for this artifact, only resolve the session
-    // (don't seed the prior thread) so the about-to-send message isn't clobbered.
-    const skipSeed = useUiStore.getState().queuedPrompt != null;
-    let alive = true;
-    void ld.context.get(artifactPath).then((ctx) => {
-      if (!alive) return;
-      sessionRef.current = ctx?.sessionId ?? null;
-      if (skipSeed) return;
-      if (!ctx) {
-        setMessages([]);
-      } else {
-        const seeded: AgentMessage[] = ctx.promptHistory.map((p, i) => ({
-          id: `seed-${i}`,
-          role: 'user' as const,
-          text: p,
-        }));
-        if (ctx.distilledSummary) {
-          seeded.push({ id: 'seed-summary', role: 'assistant', text: ctx.distilledSummary, status: 'done' });
-        }
-        setMessages(seeded);
-      }
-    });
-    return () => {
-      alive = false;
-    };
-  }, [artifactPath]);
+    if (!ld || !path) {
+      setVersions([]);
+      return;
+    }
+    void ld.versions.list(path).then(setVersions);
+  }, [path]);
 
   useEffect(() => {
-    const ld = getLd();
-    if (!ld) return;
-    const off = ld.agent.onEvent((e: LDAgentEvent) => {
-      switch (e.kind) {
-        case 'session':
-          sessionRef.current = e.sessionId;
-          break;
-        case 'assistant':
-          append({ id: nextId(), role: 'assistant', text: e.text, status: 'done' });
-          break;
-        case 'tool':
-          append({ id: nextId(), role: 'tool', text: `Running ${e.tool}`, tool: e.tool, status: 'running' });
-          break;
-        case 'tool-result':
-          setMessages((prev) => {
-            // Mark the most recent running tool row done.
-            const idx = [...prev].reverse().findIndex((m) => m.role === 'tool' && m.status === 'running');
-            if (idx === -1) return prev;
-            const realIdx = prev.length - 1 - idx;
-            const next = prev.slice();
-            const target = next[realIdx];
-            if (target) next[realIdx] = { ...target, status: e.ok ? 'done' : 'error' };
-            return next;
-          });
-          break;
-        case 'result':
-          if (e.sessionId) sessionRef.current = e.sessionId;
-          setRunning(false);
-          break;
-        case 'error':
-          append({ id: nextId(), role: 'assistant', text: `⚠ ${e.message}`, status: 'error' });
-          setRunning(false);
-          break;
-      }
-    });
-    return off;
-  }, [append]);
+    refresh();
+  }, [refresh, artifactNonce]);
 
-  const send = useCallback(
-    async (prompt: string) => {
-      const trimmed = prompt.trim();
-      if (!trimmed) return;
-      append({ id: nextId(), role: 'user', text: trimmed });
+  const restore = useCallback(
+    async (versionId: string) => {
       const ld = getLd();
-      if (!ld) {
-        append({
-          id: nextId(),
-          role: 'assistant',
-          text: 'Open Lens Designer in the desktop app to run this through your CLI + CLAD.',
-          status: 'done',
-        });
-        return;
-      }
-      setRunning(true);
-      const artifact = artifactRef.current;
-      // Resolve the resumable session for this artifact if we don't have it
-      // yet (e.g. refining an asset whose thread hasn't been opened this session).
-      let resume = sessionRef.current;
-      if (artifact && !resume) {
-        const ctx = await ld.context.get(artifact.path);
-        resume = ctx?.sessionId ?? null;
-        sessionRef.current = resume;
-      }
-      try {
-        await ld.agent.run({
-          prompt: trimmed,
-          ...(resume ? { resumeSessionId: resume } : {}),
-          ...(artifact ? { artifactPath: artifact.path, artifactId: artifact.id } : {}),
-        });
-      } catch (err) {
-        append({ id: nextId(), role: 'assistant', text: `⚠ ${(err as Error).message}`, status: 'error' });
-        setRunning(false);
-      }
+      if (!ld || !path) return;
+      await ld.versions.restore({ path, versionId });
+      bumpArtifacts(); // re-read the asset + preview
+      refresh();
     },
-    [append],
+    [path, bumpArtifacts, refresh],
   );
-  sendRef.current = send;
 
-  // Auto-send a queued "Refine" prompt. Works whether or not the artifact's
-  // path changed (selecting an asset then refining it keeps the same path, so
-  // this can't rely on the context-load effect).
-  const queuedPrompt = useUiStore((s) => s.queuedPrompt);
-  const clearQueuedPrompt = useUiStore((s) => s.clearQueuedPrompt);
-  useEffect(() => {
-    if (!queuedPrompt) return;
-    const prompt = queuedPrompt;
-    clearQueuedPrompt();
-    const ld = getLd();
-    const artifact = artifactRef.current;
-    void (async () => {
-      // Reload THIS artifact's saved thread (so refine resumes its real
-      // conversation + session, not whatever was open), then send.
-      if (ld && artifact) {
-        const ctx = await ld.context.get(artifact.path);
-        sessionRef.current = ctx?.sessionId ?? null;
-        const seeded: AgentMessage[] = ctx
-          ? ctx.promptHistory.map((p, i) => ({ id: `seed-${i}`, role: 'user' as const, text: p }))
-          : [];
-        if (ctx?.distilledSummary) {
-          seeded.push({ id: 'seed-summary', role: 'assistant', text: ctx.distilledSummary, status: 'done' });
-        }
-        setMessages(seeded);
-      }
-      sendRef.current(prompt);
-    })();
-  }, [queuedPrompt, clearQueuedPrompt]);
-
-  const cancel = useCallback(() => {
-    void getLd()?.agent.cancel();
-    setRunning(false);
-  }, []);
-
-  /** Start a fresh conversation: clear the thread + drop the resumable session. */
-  const reset = useCallback(() => {
-    void getLd()?.agent.cancel();
-    sessionRef.current = null;
-    setRunning(false);
-    setMessages(getLd() ? [] : []);
-  }, []);
-
-  return { messages, running, send, cancel, reset, electron, sessionId: sessionRef.current };
+  return { versions, restore, refresh };
 }
+

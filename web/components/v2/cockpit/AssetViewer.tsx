@@ -10,13 +10,25 @@ import {
   Download,
   MoreHorizontal,
   Box,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
-import { useFileUrl } from '@/lib/v2/hooks';
+import { useFileUrl, useVersions } from '@/lib/v2/hooks';
 import { useUiStore } from '@/lib/v2/ui-store';
+import { useAgentStore } from '@/lib/v2/agent-store';
 import type { AssetItem } from '@/lib/v2/types';
 import { Button, Pill, SectionLabel } from '../ui/Primitives';
 import { GLBViewer } from './GLBViewer';
+
+function relAge(ms: number): string {
+  const s = Math.max(1, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
 
 /* A stylized 3D stage stand-in: gridded floor, soft glow, slowly spinning
    wireframe solid. Real GLB rendering (three.js) drops in here later. */
@@ -164,21 +176,19 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
 export function AssetViewer({ asset }: { asset: AssetItem | null }) {
   // Real file bytes for the selected asset (null in the browser / for mock ids).
   const url = useFileUrl(asset?.id ?? null);
-  const refineArtifact = useUiStore((s) => s.refineArtifact);
+  const refineAsset = useAgentStore((s) => s.refineAsset);
+  const setAgentOpen = useUiStore((s) => s.setAgentOpen);
+  const { versions, restore } = useVersions(asset?.id ?? null);
   const [refinePrompt, setRefinePrompt] = useState('');
 
   const submitRefine = (): void => {
     const p = refinePrompt.trim();
     if (!p || !asset) return;
-    const kindWord =
-      asset.kind === 'mesh' ? '3D mesh asset' : asset.kind === 'music' ? 'music track' : 'sound effect';
-    // Hand the agent the exact file so it doesn't search the project for it.
-    const prompt =
-      `Modify the existing ${kindWord} at this exact file path: ${asset.id}\n` +
-      `Requested change: ${p}\n` +
-      `Regenerate/edit it and overwrite that same file in place — do not create a new asset or a new file path. ` +
-      `It is already in the project; operate on it directly.`;
-    refineArtifact({ path: asset.id, id: asset.id, name: asset.name, kind: 'asset' }, prompt);
+    // The agent run is fully wired in main (gen-prompt reuses the asset's
+    // original CLAD skill + exact path, versions are snapshotted, the result
+    // is reconciled to replace in place). Here we just open the thread.
+    setAgentOpen(true);
+    refineAsset(asset, p);
     setRefinePrompt('');
   };
 
@@ -255,6 +265,38 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
             <Button variant="primary" size="md" icon={<Sparkles />} onClick={submitRefine} disabled={!refinePrompt.trim()}>
               Refine
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* version history — every refine snapshots the prior bytes; roll back here */}
+      {versions.length > 0 && (
+        <div className="rounded-lg border border-subtle bg-bg-1 p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <History className="w-3.5 h-3.5 text-text-tertiary" />
+            <SectionLabel>Version history</SectionLabel>
+            <span className="text-2xs text-text-tertiary font-num">{versions.length}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {versions.map((v) => (
+              <div
+                key={v.id}
+                className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-bg-2 transition-colors"
+              >
+                <div className="flex flex-col">
+                  <span className="text-xs text-text-secondary">{relAge(v.createdMs)}</span>
+                  <span className="font-num text-2xs text-text-tertiary">
+                    {(v.sizeBytes / 1024).toFixed(0)} KB
+                  </span>
+                </div>
+                <button
+                  onClick={() => void restore(v.id)}
+                  className="flex items-center gap-1 px-2 h-6 rounded-md text-2xs text-text-secondary border border-subtle hover:border-default hover:text-text-primary transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" /> Restore
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

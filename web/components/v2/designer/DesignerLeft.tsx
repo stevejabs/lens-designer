@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
+import { useAgentStore } from '@/lib/v2/agent-store';
 import { cn } from '@/lib/v2/cn';
 import { useViews } from '@/lib/v2/hooks';
 import { SectionLabel } from '../ui/Primitives';
@@ -35,7 +36,8 @@ const PALETTE: { label: string; icon: LucideIcon }[] = [
 export function DesignerLeft() {
   const selectedViewId = useUiStore((s) => s.selectedViewId);
   const selectView = useUiStore((s) => s.selectView);
-  const promptAgent = useUiStore((s) => s.promptAgent);
+  const setAgentOpen = useUiStore((s) => s.setAgentOpen);
+  const openCreate = useAgentStore((s) => s.openCreate);
   const setActiveArtifact = useUiStore((s) => s.setActiveArtifact);
   const { views, refresh } = useViews();
 
@@ -56,7 +58,10 @@ export function DesignerLeft() {
             <RotateCw className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => promptAgent('Build a UI view: ', true)}
+            onClick={() => {
+              setAgentOpen(true);
+              openCreate('ui');
+            }}
             className="flex items-center justify-center w-7 h-7 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors"
             title="New view (prompt)"
           >

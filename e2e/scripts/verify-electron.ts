@@ -96,26 +96,39 @@ async function main(): Promise<void> {
   });
   console.log('audio element state:', JSON.stringify(audioState));
 
-  // 6. Refine: typing a prompt + clicking Refine should route it to the agent
-  //    thread (user message appears, run starts). We don't wait for the run.
+  // 6. Multi-thread agent tabs: each "New Asset" choice opens its own thread
+  //    tab so several generations can run + be monitored side-by-side. These
+  //    open a tab only (no agent job runs until the user sends), so they're
+  //    side-effect-free against the real project.
+  const tabCountBefore = await win.locator('aside button[title^="New "], aside button[title^="Refine "]').count();
+  await win.locator('button:has-text("New Asset")').first().click().catch(() => {});
+  await win.locator('button:has-text("3D Asset")').first().click().catch(() => {});
+  await win.waitForTimeout(400);
+  await win.locator('button:has-text("New Asset")').first().click().catch(() => {});
+  await win.locator('button:has-text("Music")').first().click().catch(() => {});
+  await win.waitForTimeout(600);
+  const tabCountAfter = await win.locator('aside button[title^="New "], aside button[title^="Refine "]').count();
+  console.log('agent thread tabs before/after New Asset x2:', tabCountBefore, '→', tabCountAfter);
+  console.log('multi-tab threads created:', tabCountAfter >= tabCountBefore + 2);
+
+  // 7. Refine routing: select the mesh, type a change, click Refine. A
+  //    "Refine <name>" tab should appear with the marker as the first user
+  //    message. This DOES start a real job, so we immediately Stop it.
+  await win.locator('[role="button"]', { hasText: 'Ghost' }).first().click().catch(() => {});
+  await win.waitForTimeout(500);
   const refineInput = win.locator('input[placeholder*="cartoonish"], input[placeholder*="warmer"]').first();
   await refineInput.fill('zztest-refine-marker').catch(() => {});
-  await win.locator('button:has-text("Refine")').first().click().catch(() => {});
-  await win.waitForTimeout(2500);
-  const agentText = await win.locator('aside:has-text("Agent")').innerText().catch(() => '');
-  console.log('refine routed to agent (marker in thread):', /zztest-refine-marker/.test(agentText));
+  await win.locator('aside button:has-text("Refine"), button:has-text("Refine")').last().click().catch(() => {});
+  await win.waitForTimeout(2000);
+  const agentText = await win.locator('aside:has-text("Agents")').innerText().catch(() => '');
+  console.log('refine routed into a thread (marker present):', /zztest-refine-marker/.test(agentText));
+  const refineTab = (await win.locator('aside button[title^="Refine "]').count()) > 0;
+  console.log('refine opened its own thread tab:', refineTab);
   const stopVisible = (await win.locator('button:has-text("Stop")').count()) > 0;
   console.log('stop control visible during run:', stopVisible);
-
-  // Let the thread accumulate streamed messages, then check it auto-scrolled.
-  await win.waitForTimeout(6000);
-  const scroll = await win.evaluate(() => {
-    const candidates = Array.from(document.querySelectorAll('aside .overflow-y-auto')) as HTMLElement[];
-    const el = candidates.find((e) => e.scrollHeight > e.clientHeight);
-    if (!el) return 'thread not overflowing yet';
-    return { fromBottom: el.scrollHeight - el.scrollTop - el.clientHeight, scrollable: el.scrollHeight - el.clientHeight };
-  });
-  console.log('thread scroll:', JSON.stringify(scroll));
+  // Cancel the real job so we don't churn the project.
+  await win.locator('button:has-text("Stop")').first().click().catch(() => {});
+  await win.waitForTimeout(500);
 
   console.log('screenshots: /tmp/ld-electron-{designer,preview,assets}.png');
   void viewsText;
