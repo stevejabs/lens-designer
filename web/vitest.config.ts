@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Match Next's automatic JSX runtime so component tests don't need an
+  // explicit `import React`.
+  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   test: {
     environment: 'jsdom',
     include: ['test/**/*.test.{ts,tsx}'],

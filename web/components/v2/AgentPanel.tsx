@@ -8,6 +8,7 @@ import { getLd } from '@/lib/v2/native';
 import type { AgentMessage } from '@/lib/v2/types';
 import { Pill } from './ui/Primitives';
 import { AutoTextarea } from './ui/AutoTextarea';
+import { Markdown } from './ui/Markdown';
 
 function ToolRow({ msg }: { msg: AgentMessage }) {
   return (
@@ -49,7 +50,7 @@ function MessageRow({ msg }: { msg: AgentMessage }) {
       <span className="shrink-0 mt-0.5 flex items-center justify-center w-6 h-6 rounded-md accent-bg shadow-[0_0_12px_-2px_var(--accent-glow)]">
         <Sparkles className="w-3.5 h-3.5 text-text-inverse" />
       </span>
-      <div className="text-sm text-text-secondary leading-relaxed pt-0.5">{msg.text}</div>
+      <Markdown className="min-w-0 flex-1 pt-0.5">{msg.text}</Markdown>
     </div>
   );
 }
