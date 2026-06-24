@@ -183,6 +183,8 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
     '.gltf': 'model/gltf+json',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
+    '.ts': 'text/plain',
+    '.js': 'text/plain',
   };
   ipcMain.handle('ld:file:read', async (_e, path: string): Promise<string | null> => {
     const dir = await projectDir();

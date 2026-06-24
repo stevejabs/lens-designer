@@ -137,6 +137,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
+      sucrase:
+        specifier: ^3.35.1
+        version: 3.35.1
       three:
         specifier: ^0.184.0
         version: 0.184.0

@@ -130,6 +130,54 @@ export function usePreview(): { image: string | null; capturing: boolean; captur
   return { image, capturing, capture };
 }
 
+/** Render a scripted mesh NATIVELY: read its .ts source and run it against a
+ *  shimmed Lens runtime to extract three.js geometry — fast, no scene round
+ *  trip. Returns null when the script uses unsupported APIs (caller falls back
+ *  to the LS preview). */
+export function useScriptMeshRender(path: string | null): {
+  description: import('./script-mesh/runtime').SceneDescription | null;
+  loading: boolean;
+} {
+  const [description, setDescription] = useState<
+    import('./script-mesh/runtime').SceneDescription | null
+  >(null);
+  const [loading, setLoading] = useState(false);
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+
+  useEffect(() => {
+    const ld = getLd();
+    if (!ld || !path) {
+      setDescription(null);
+      return;
+    }
+    let alive = true;
+    setLoading(true);
+    void ld.file
+      .read(path)
+      .then((url) => (url ? fetch(url).then((r) => r.text()) : null))
+      .then(async (src) => {
+        if (!alive) return;
+        if (!src) {
+          setDescription(null);
+          return;
+        }
+        const { runScriptMesh } = await import('./script-mesh/runtime');
+        setDescription(runScriptMesh(src));
+      })
+      .catch(() => {
+        if (alive) setDescription(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [path, artifactNonce]);
+
+  return { description, loading };
+}
+
 /** Render a code-authored (scripted) mesh: load it into the edit bay so it's
  *  isolated, then capture the live Lens Studio preview. Unlike a GLB we can't
  *  render the TS in three.js — Lens Studio runs the script and we screenshot it. */
