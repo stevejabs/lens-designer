@@ -118,6 +118,14 @@ export interface LDApi {
     list(): Promise<LDJobRecord[]>;
     cancel(jobId: string): Promise<void>;
   };
+  posture: {
+    set(posture: 'design' | 'runtime'): Promise<{ editEnabled: boolean; appEnabled: boolean }>;
+  };
+  view: {
+    load(viewPath: string): Promise<{ status: string; host?: string }>;
+    clear(): Promise<void>;
+  };
+  onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
   asset: {
     create(req: { kind: LDAssetGenKind; userText: string }): Promise<{ jobId: string; title: string }>;
     refine(req: { artifactPath: string; userText: string }): Promise<{ jobId: string }>;

@@ -17,6 +17,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { useAgentStore } from '@/lib/v2/agent-store';
+import { getLd } from '@/lib/v2/native';
 import { cn } from '@/lib/v2/cn';
 import { useViews } from '@/lib/v2/hooks';
 import { SectionLabel } from '../ui/Primitives';
@@ -36,6 +37,7 @@ const PALETTE: { label: string; icon: LucideIcon }[] = [
 export function DesignerLeft() {
   const selectedViewId = useUiStore((s) => s.selectedViewId);
   const selectView = useUiStore((s) => s.selectView);
+  const posture = useUiStore((s) => s.posture);
   const setAgentOpen = useUiStore((s) => s.setAgentOpen);
   const openCreate = useAgentStore((s) => s.openCreate);
   const setActiveArtifact = useUiStore((s) => s.setActiveArtifact);
@@ -79,6 +81,9 @@ export function DesignerLeft() {
               onClick={() => {
                 selectView(v.id);
                 setActiveArtifact({ path: v.id, id: v.id, name: v.name, kind: 'view' });
+                // Load this view's content into the edit bay so the preview
+                // shows what you're editing (design posture only).
+                if (posture === 'designing') void getLd()?.view.load(v.id);
               }}
               className={cn(
                 'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors text-left',

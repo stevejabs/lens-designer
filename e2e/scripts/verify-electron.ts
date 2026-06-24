@@ -116,7 +116,9 @@ async function main(): Promise<void> {
   //    message. This DOES start a real job, so we immediately Stop it.
   await win.locator('[role="button"]', { hasText: 'Ghost' }).first().click().catch(() => {});
   await win.waitForTimeout(500);
-  const refineInput = win.locator('input[placeholder*="cartoonish"], input[placeholder*="warmer"]').first();
+  const refineInput = win
+    .locator('textarea[placeholder*="cartoonish"], textarea[placeholder*="warmer"], input[placeholder*="cartoonish"]')
+    .first();
   await refineInput.fill('zztest-refine-marker').catch(() => {});
   await win.locator('aside button:has-text("Refine"), button:has-text("Refine")').last().click().catch(() => {});
   await win.waitForTimeout(2000);
@@ -130,7 +132,27 @@ async function main(): Promise<void> {
   await win.locator('button:has-text("Stop")').first().click().catch(() => {});
   await win.waitForTimeout(500);
 
-  console.log('screenshots: /tmp/ld-electron-{designer,preview,assets}.png');
+  // 8. Bays/posture: in the Designer, select a view (loads it into the edit
+  //    bay) and flip Design/Run posture. The scene-side effect is proven by
+  //    scripts/verify-bays.ts; here we confirm the app wiring runs clean.
+  await win.locator('[title="Designer"]').click().catch(() => {});
+  await win.waitForTimeout(1500);
+  const viewBtn = win.locator('button', { hasText: /WelcomeBanner|LDValidation/ }).first();
+  const hadView = (await viewBtn.count()) > 0;
+  await viewBtn.click().catch(() => {});
+  await win.waitForTimeout(4000); // applier loads the view into the edit bay
+  const designPreview = (await win.locator('img[alt="Live Lens Studio preview"]').count()) > 0;
+  console.log('selected a view in Designer:', hadView, '| preview present after load:', designPreview);
+  // Flip posture Run → Design via the header toggle.
+  await win.locator('button', { hasText: /^Run$/ }).first().click().catch(() => {});
+  await win.waitForTimeout(1500);
+  await win.locator('button', { hasText: /^Design$/ }).first().click().catch(() => {});
+  await win.waitForTimeout(1500);
+  const stillAlive = (await win.locator('header').count()) > 0;
+  console.log('posture toggle Run↔Design ran without crashing:', stillAlive);
+  await win.screenshot({ path: '/tmp/ld-electron-designer-bay.png' });
+
+  console.log('screenshots: /tmp/ld-electron-{designer,preview,assets,designer-bay}.png');
   void viewsText;
   await app.close();
   console.log('DONE');

@@ -246,6 +246,15 @@ export interface LDApi {
     list(): Promise<LDJobRecord[]>;
     cancel(jobId: string): Promise<void>;
   };
+  posture: {
+    set(posture: 'design' | 'runtime'): Promise<{ editEnabled: boolean; appEnabled: boolean }>;
+  };
+  view: {
+    load(viewPath: string): Promise<{ status: string; host?: string }>;
+    clear(): Promise<void>;
+  };
+  /** Bay bootstrap result (created/attached/posture) pushed after connect. */
+  onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
   asset: {
     create(req: { kind: 'mesh' | 'music' | 'sfx'; userText: string }): Promise<{ jobId: string; title: string }>;
     refine(req: { artifactPath: string; userText: string }): Promise<{ jobId: string }>;
@@ -315,6 +324,19 @@ const ld: LDApi = {
   jobs: {
     list: () => ipcRenderer.invoke('ld:jobs:list') as Promise<LDJobRecord[]>,
     cancel: (jobId) => ipcRenderer.invoke('ld:jobs:cancel', jobId) as Promise<void>,
+  },
+  posture: {
+    set: (posture) =>
+      ipcRenderer.invoke('ld:posture:set', posture) as Promise<{ editEnabled: boolean; appEnabled: boolean }>,
+  },
+  view: {
+    load: (viewPath) => ipcRenderer.invoke('ld:view:load', viewPath) as Promise<{ status: string; host?: string }>,
+    clear: () => ipcRenderer.invoke('ld:view:clear') as Promise<void>,
+  },
+  onBays: (handler) => {
+    const listener = (_e: Electron.IpcRendererEvent, r: { ok: boolean; message?: string }): void => handler(r);
+    ipcRenderer.on('ld:bays', listener);
+    return () => ipcRenderer.removeListener('ld:bays', listener);
   },
   asset: {
     create: (req) => ipcRenderer.invoke('ld:asset:create', req) as Promise<{ jobId: string; title: string }>,

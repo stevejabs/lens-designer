@@ -46,7 +46,13 @@ function ConnectionChip() {
 
 function PostureToggle() {
   const posture = useUiStore((s) => s.posture);
-  const togglePosture = useUiStore((s) => s.togglePosture);
+  const setPosture = useUiStore((s) => s.setPosture);
+  const select = (p: 'designing' | 'running'): void => {
+    if (posture === p) return;
+    setPosture(p);
+    // Flip which bay is live in the actual scene (edit bay vs app bay).
+    void getLd()?.posture.set(p === 'designing' ? 'design' : 'runtime');
+  };
   return (
     <div className="no-drag flex items-center p-0.5 rounded-lg bg-bg-2 border border-subtle">
       {(['designing', 'running'] as const).map((p) => {
@@ -54,7 +60,7 @@ function PostureToggle() {
         return (
           <button
             key={p}
-            onClick={() => posture !== p && togglePosture()}
+            onClick={() => select(p)}
             className={cn(
               'h-6 px-2.5 rounded-md text-2xs font-semibold uppercase tracking-wide transition-all duration-150 ease-spring',
               active && p === 'designing' && 'bg-accent text-text-inverse',

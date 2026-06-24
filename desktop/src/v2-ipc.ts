@@ -22,6 +22,15 @@ import { capturePreview, readViewSource, saveViewSource, recompile } from './ser
 import { parseViewFields, setViewField, type FieldKind } from './services/view-parse.js';
 import { readContext, appendTurn, recordCreation } from './services/context-store.js';
 import { buildCreatePrompt, buildRefinePrompt, SKILL_FOR_KIND, type GenKind } from './services/gen-prompt.js';
+import {
+  ensureBays,
+  setBayPosture,
+  writeRuntimeGate,
+  attachRuntimeGate,
+  loadViewIntoEditBay,
+  clearEditBay,
+  type BayPosture,
+} from './services/bays.js';
 import { snapshotAssets, detectCreated, reconcileRefine } from './services/asset-watch.js';
 import { snapshot as snapshotVersion, listVersions, restoreVersion } from './services/versions.js';
 import type { JobMeta, JobMode } from './services/jobs.js';
@@ -39,8 +48,38 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
   };
 
-  orchestrator.on('connection', (s: ConnState) => send('ld:connection', s));
   orchestrator.on('agent-event', (e: TaggedAgentEvent) => send('ld:agent-event', e));
+
+  // ── Bay bootstrap on connect ──
+  // On every fresh connection, find-or-create the edit/app bays (ownership-
+  // marked), (re)write + attach the on-device runtime gate, and settle into
+  // design posture. Idempotent; re-runs on reconnect.
+  let bootstrapping = false;
+  const bootstrapBays = async (): Promise<void> => {
+    if (bootstrapping) return;
+    bootstrapping = true;
+    try {
+      await orchestrator.runDirect((c) => ensureBays(c), { write: true });
+      const dir = await projectDir();
+      if (dir) await writeRuntimeGate(dir);
+      for (let i = 0; i < 25; i++) {
+        const r = await orchestrator.runDirect((c) => attachRuntimeGate(c), { write: true });
+        if (r.status === 'attached') break;
+        await new Promise((res) => setTimeout(res, 400)); // LS still importing the gate
+      }
+      await orchestrator.runDirect((c) => setBayPosture(c, 'design'), { write: true });
+      send('ld:bays', { ok: true });
+    } catch (err) {
+      send('ld:bays', { ok: false, message: (err as Error).message });
+    } finally {
+      bootstrapping = false;
+    }
+  };
+
+  orchestrator.on('connection', (s: ConnState) => {
+    send('ld:connection', s);
+    if (s.kind === 'connected') void bootstrapBays();
+  });
 
   /** Resolve the open project directory (cwd for jobs, scope for reads). */
   const projectDir = async (): Promise<string | null> => {
@@ -151,6 +190,20 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
       return null;
     }
   });
+
+  // ── Bays / posture ──
+  ipcMain.handle('ld:posture:set', (_e, posture: BayPosture) =>
+    orchestrator.runDirect((c) => setBayPosture(c, posture), { write: true }),
+  );
+  // Load the selected view's content into the edit bay (so the preview shows
+  // what you're editing). The TS asset name is the view file's basename.
+  ipcMain.handle('ld:view:load', (_e, viewPath: string) => {
+    const assetName = basename(viewPath).replace(/\.[tj]s$/, '');
+    return orchestrator.runDirect((c) => loadViewIntoEditBay(c, assetName), { write: true });
+  });
+  ipcMain.handle('ld:view:clear', () =>
+    orchestrator.runDirect((c) => clearEditBay(c), { write: true }),
+  );
 
   // ── Jobs ──
   ipcMain.handle('ld:jobs:list', () => orchestrator.listJobs());
