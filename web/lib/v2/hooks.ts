@@ -251,6 +251,71 @@ export function useFileUrl(path: string | null): string | null {
   return url;
 }
 
+export type OnboardState =
+  | { kind: 'none' }
+  | { kind: 'organize'; moveToAppBay: string[]; stayAtRoot: string[] }
+  | { kind: 'build' };
+
+/** Decide whether a freshly-connected project needs onboarding:
+ *  - 'organize': it has app content at the scene root to move under the app bay.
+ *  - 'build'  : it's empty — offer a "build this" prompt.
+ *  Detection runs once per connection; dismissing suppresses it for the session. */
+export function useOnboarding(): {
+  state: OnboardState;
+  busy: boolean;
+  organize: () => Promise<void>;
+  dismiss: () => void;
+} {
+  const [state, setState] = useState<OnboardState>({ kind: 'none' });
+  const [busy, setBusy] = useState(false);
+  const conn = useConnection();
+  const bumpArtifacts = useUiStore((s) => s.bumpArtifacts);
+  const dismissedRef = useRef(false);
+
+  useEffect(() => {
+    const ld = getLd();
+    if (!ld || conn.kind !== 'connected' || dismissedRef.current) return;
+    let alive = true;
+    void Promise.all([ld.project.organizePlan(), ld.assets.list(), ld.views.list()]).then(
+      ([plan, assets, views]) => {
+        if (!alive) return;
+        if (plan.moveToAppBay.length > 0) {
+          setState({ kind: 'organize', moveToAppBay: plan.moveToAppBay, stayAtRoot: plan.stayAtRoot });
+        } else if (assets.length === 0 && views.length === 0) {
+          setState({ kind: 'build' });
+        } else {
+          setState({ kind: 'none' });
+        }
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [conn.kind]);
+
+  const organize = useCallback(async () => {
+    const ld = getLd();
+    if (!ld) return;
+    setBusy(true);
+    try {
+      await ld.project.organize();
+      bumpArtifacts();
+      dismissedRef.current = true;
+      setState({ kind: 'none' });
+    } finally {
+      setBusy(false);
+    }
+  }, [bumpArtifacts]);
+
+  const dismiss = useCallback(() => {
+    dismissedRef.current = true;
+    setState({ kind: 'none' });
+  }, []);
+
+  return { state, busy, organize, dismiss };
+}
+
 /** The open project's name (basename of its dir), refreshed whenever the
  *  connection (re)connects — so switching projects + reconnecting updates it. */
 export function useProjectName(): string | null {

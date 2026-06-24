@@ -94,7 +94,11 @@ export interface LDApi {
     reconnect(): Promise<void>;
     onChange(handler: (s: LDConnState) => void): () => void;
   };
-  project: { dir(): Promise<string | null> };
+  project: {
+    dir(): Promise<string | null>;
+    organizePlan(): Promise<{ moveToAppBay: string[]; stayAtRoot: string[]; hasAppBay: boolean }>;
+    organize(): Promise<{ status: string; moved: string[] }>;
+  };
   scene: { tools(): Promise<{ count: number; sample: string[]; server: unknown }> };
   assets: { list(): Promise<LDScannedAsset[]> };
   views: {

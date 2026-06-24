@@ -212,6 +212,8 @@ export interface LDApi {
   };
   project: {
     dir(): Promise<string | null>;
+    organizePlan(): Promise<{ moveToAppBay: string[]; stayAtRoot: string[]; hasAppBay: boolean }>;
+    organize(): Promise<{ status: string; moved: string[] }>;
   };
   scene: {
     tools(): Promise<{ count: number; sample: string[]; server: unknown }>;
@@ -290,6 +292,14 @@ const ld: LDApi = {
   },
   project: {
     dir: () => ipcRenderer.invoke('ld:project:dir') as Promise<string | null>,
+    organizePlan: () =>
+      ipcRenderer.invoke('ld:project:organizePlan') as Promise<{
+        moveToAppBay: string[];
+        stayAtRoot: string[];
+        hasAppBay: boolean;
+      }>,
+    organize: () =>
+      ipcRenderer.invoke('ld:project:organize') as Promise<{ status: string; moved: string[] }>,
   },
   scene: {
     tools: () =>

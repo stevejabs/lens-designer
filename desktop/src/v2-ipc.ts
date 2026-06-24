@@ -37,6 +37,7 @@ import {
   clearEditBay,
   type BayPosture,
 } from './services/bays.js';
+import { planSceneOrganization, organizeSceneIntoAppBay } from './services/scene-organize.js';
 import { snapshotAssets, detectCreated, reconcileRefine } from './services/asset-watch.js';
 import { snapshot as snapshotVersion, listVersions, restoreVersion } from './services/versions.js';
 import type { JobMeta, JobMode } from './services/jobs.js';
@@ -209,6 +210,16 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
   });
   ipcMain.handle('ld:view:clear', () =>
     orchestrator.runDirect((c) => clearEditBay(c), { write: true }),
+  );
+
+  // ── Project onboarding: organize an existing scene into the app bay ──
+  // Read-only plan (content vs. infrastructure) for the confirmation dialog.
+  ipcMain.handle('ld:project:organizePlan', () =>
+    orchestrator.runDirect((c) => planSceneOrganization(c)),
+  );
+  // Destructive — UI gates this behind explicit confirm + a commit reminder.
+  ipcMain.handle('ld:project:organize', () =>
+    orchestrator.runDirect((c) => organizeSceneIntoAppBay(c), { write: true }),
   );
 
   // ── Jobs ──
