@@ -38,6 +38,12 @@ function versionsDir(projectDir: string, assetPath: string): string {
   return join(projectDir, ROOT, VERSIONS, keyFor(assetPath));
 }
 
+/** Absolute path of a single version snapshot (e.g. to read its bytes for
+ *  playback). The id is the snapshot filename. */
+export function versionFilePath(projectDir: string, assetPath: string, versionId: string): string {
+  return join(versionsDir(projectDir, assetPath), versionId);
+}
+
 // Filename: <epochMs><ext> — sortable, carries the timestamp, preserves ext.
 function parseEntryTime(filename: string): number {
   const n = Number.parseInt(filename.split('.')[0] ?? '', 10);

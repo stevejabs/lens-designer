@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   Play,
   Pause,
@@ -19,6 +19,7 @@ import { cn } from '@/lib/v2/cn';
 import { useFileUrl, useVersions, useScriptMeshPreview, useScriptMeshRender } from '@/lib/v2/hooks';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { useAgentStore } from '@/lib/v2/agent-store';
+import { getLd } from '@/lib/v2/native';
 import type { AssetItem } from '@/lib/v2/types';
 import { Button, Pill, SectionLabel } from '../ui/Primitives';
 import { AutoTextarea } from '../ui/AutoTextarea';
@@ -176,6 +177,29 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
     }
   };
 
+  // Scrub: seek to the fraction of the clicked/dragged x within an element.
+  const seekAt = (clientX: number, el: HTMLElement): void => {
+    const a = audioRef.current;
+    if (!a || !duration) return;
+    const rect = el.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    a.currentTime = frac * duration;
+    setProgress(a.currentTime);
+  };
+  const startScrub = (e: ReactPointerEvent<HTMLElement>): void => {
+    const el = e.currentTarget;
+    seekAt(e.clientX, el);
+    const move = (ev: PointerEvent): void => seekAt(ev.clientX, el);
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  const frac = duration ? progress / duration : 0;
+
   return (
     <div className="relative flex flex-col flex-1 rounded-xl overflow-hidden bg-bg-canvas border border-subtle">
       {url && (
@@ -198,16 +222,19 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
           <Pill tone="danger">audio failed to decode</Pill>
         </div>
       )}
+      {/* waveform — click anywhere to seek */}
       <div className="flex-1 flex items-center justify-center px-6">
-        <div className="flex items-end gap-[3px] h-28 w-full max-w-md">
+        <div
+          onPointerDown={url ? startScrub : undefined}
+          className={cn('flex items-end gap-[3px] h-28 w-full max-w-md', url && 'cursor-pointer')}
+        >
           {Array.from({ length: bars }).map((_, i) => {
             const h = 16 + Math.abs(Math.sin(i * 0.5) * Math.cos(i * 0.17)) * 84;
-            const frac = duration ? progress / duration : 0;
             const active = i / bars < frac;
             return (
               <span
                 key={i}
-                className={cn('flex-1 rounded-full transition-colors', active ? 'accent-bg' : 'bg-bg-3')}
+                className={cn('flex-1 rounded-full transition-colors pointer-events-none', active ? 'accent-bg' : 'bg-bg-3')}
                 style={{ height: `${h}%` }}
               />
             );
@@ -222,15 +249,113 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
         >
           {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>
-        <div className="flex-1 h-1 rounded-full bg-bg-3 overflow-hidden">
-          <div
-            className="h-full accent-bg"
-            style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
+        {/* seek bar — drag the thumb or click to scrub */}
+        <div
+          onPointerDown={url ? startScrub : undefined}
+          role="slider"
+          aria-label="Seek"
+          aria-valuenow={Math.round(frac * 100)}
+          className={cn('group relative flex-1 h-4 flex items-center', url && 'cursor-pointer')}
+        >
+          <div className="h-1 w-full rounded-full bg-bg-3 overflow-hidden">
+            <div className="h-full accent-bg" style={{ width: `${frac * 100}%` }} />
+          </div>
+          <span
+            className="absolute w-3 h-3 rounded-full bg-white shadow -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ left: `${frac * 100}%` }}
           />
         </div>
-        <span className="font-num text-2xs text-text-tertiary">
+        <span className="font-num text-2xs text-text-tertiary tabular-nums">
           {duration ? `${fmtTime(progress)} / ${fmtTime(duration)}` : (asset.meta?.length ?? '0:00')}
         </span>
+      </div>
+    </div>
+  );
+}
+
+interface VersionEntry {
+  id: string;
+  createdMs: number;
+  sizeBytes: number;
+}
+
+/** Version history with rollback — and, for audio, the ability to listen to
+ *  each prior take before restoring it. */
+function VersionHistory({
+  asset,
+  versions,
+  restore,
+}: {
+  asset: AssetItem;
+  versions: VersionEntry[];
+  restore: (id: string) => Promise<void>;
+}) {
+  const isAudio = asset.kind === 'music' || asset.kind === 'sfx';
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+
+  const playVersion = async (versionId: string): Promise<void> => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playingId === versionId) {
+      a.pause();
+      setPlayingId(null);
+      return;
+    }
+    const ld = getLd();
+    if (!ld) return;
+    const url = await ld.versions.read({ path: asset.id, versionId });
+    if (!url) return;
+    a.src = url;
+    try {
+      await a.play();
+      setPlayingId(versionId);
+    } catch {
+      setPlayingId(null);
+    }
+  };
+
+  if (versions.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-subtle bg-bg-1 p-3">
+      <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
+      <div className="flex items-center gap-1.5 mb-2">
+        <History className="w-3.5 h-3.5 text-text-tertiary" />
+        <SectionLabel>Version history</SectionLabel>
+        <span className="text-2xs text-text-tertiary font-num">{versions.length}</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {versions.map((v) => (
+          <div
+            key={v.id}
+            className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-bg-2 transition-colors"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {isAudio && (
+                <button
+                  onClick={() => void playVersion(v.id)}
+                  title={playingId === v.id ? 'Pause' : 'Play this version'}
+                  className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-bg-3 text-text-secondary hover:text-text-primary hover:brightness-110 transition-all"
+                >
+                  {playingId === v.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+                </button>
+              )}
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs text-text-secondary">{relAge(v.createdMs)}</span>
+                <span className="font-num text-2xs text-text-tertiary">
+                  {(v.sizeBytes / 1024).toFixed(0)} KB
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => void restore(v.id)}
+              className="flex items-center gap-1 px-2 h-6 shrink-0 rounded-md text-2xs text-text-secondary border border-subtle hover:border-default hover:text-text-primary transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" /> Restore
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -337,37 +462,8 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
         </div>
       )}
 
-      {/* version history — every refine snapshots the prior bytes; roll back here */}
-      {versions.length > 0 && (
-        <div className="rounded-lg border border-subtle bg-bg-1 p-3">
-          <div className="flex items-center gap-1.5 mb-2">
-            <History className="w-3.5 h-3.5 text-text-tertiary" />
-            <SectionLabel>Version history</SectionLabel>
-            <span className="text-2xs text-text-tertiary font-num">{versions.length}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            {versions.map((v) => (
-              <div
-                key={v.id}
-                className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-bg-2 transition-colors"
-              >
-                <div className="flex flex-col">
-                  <span className="text-xs text-text-secondary">{relAge(v.createdMs)}</span>
-                  <span className="font-num text-2xs text-text-tertiary">
-                    {(v.sizeBytes / 1024).toFixed(0)} KB
-                  </span>
-                </div>
-                <button
-                  onClick={() => void restore(v.id)}
-                  className="flex items-center gap-1 px-2 h-6 rounded-md text-2xs text-text-secondary border border-subtle hover:border-default hover:text-text-primary transition-colors"
-                >
-                  <RotateCcw className="w-3 h-3" /> Restore
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* version history — every refine snapshots the prior bytes; listen + roll back */}
+      <VersionHistory asset={asset} versions={versions} restore={restore} />
     </div>
   );
 }

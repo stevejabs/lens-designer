@@ -129,6 +129,7 @@ export interface LDApi {
   versions: {
     list(path: string): Promise<LDVersionEntry[]>;
     restore(req: { path: string; versionId: string }): Promise<{ ok: boolean; message: string }>;
+    read(req: { path: string; versionId: string }): Promise<string | null>;
   };
   jobs: {
     list(): Promise<LDJobRecord[]>;

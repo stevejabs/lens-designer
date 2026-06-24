@@ -244,6 +244,7 @@ export interface LDApi {
   versions: {
     list(path: string): Promise<LDVersionEntry[]>;
     restore(req: { path: string; versionId: string }): Promise<{ ok: boolean; message: string }>;
+    read(req: { path: string; versionId: string }): Promise<string | null>;
   };
   jobs: {
     list(): Promise<LDJobRecord[]>;
@@ -337,6 +338,7 @@ const ld: LDApi = {
     list: (path) => ipcRenderer.invoke('ld:versions:list', path) as Promise<LDVersionEntry[]>,
     restore: (req) =>
       ipcRenderer.invoke('ld:versions:restore', req) as Promise<{ ok: boolean; message: string }>,
+    read: (req) => ipcRenderer.invoke('ld:versions:read', req) as Promise<string | null>,
   },
   jobs: {
     list: () => ipcRenderer.invoke('ld:jobs:list') as Promise<LDJobRecord[]>,

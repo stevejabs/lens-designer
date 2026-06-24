@@ -40,7 +40,7 @@ import {
 import { planSceneOrganization, organizeSceneIntoAppBay } from './services/scene-organize.js';
 import { buildPlanPrompt, parseManifest } from './services/build-plan.js';
 import { snapshotAssets, detectCreated, reconcileRefine } from './services/asset-watch.js';
-import { snapshot as snapshotVersion, listVersions, restoreVersion } from './services/versions.js';
+import { snapshot as snapshotVersion, listVersions, restoreVersion, versionFilePath } from './services/versions.js';
 import type { JobMeta, JobMode } from './services/jobs.js';
 import type { ConnState } from './services/ls-connection.js';
 
@@ -186,10 +186,7 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
     '.ts': 'text/plain',
     '.js': 'text/plain',
   };
-  ipcMain.handle('ld:file:read', async (_e, path: string): Promise<string | null> => {
-    const dir = await projectDir();
-    if (!dir) return null;
-    const abs = resolvePath(path);
+  const readAsDataUrl = async (abs: string, dir: string): Promise<string | null> => {
     // Scope guard: only serve files under the open project directory.
     if (abs !== dir && !abs.startsWith(resolvePath(dir) + '/')) return null;
     try {
@@ -199,6 +196,17 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
     } catch {
       return null;
     }
+  };
+  ipcMain.handle('ld:file:read', async (_e, path: string): Promise<string | null> => {
+    const dir = await projectDir();
+    if (!dir) return null;
+    return readAsDataUrl(resolvePath(path), resolvePath(dir));
+  });
+  // Read a version snapshot's bytes (e.g. to play a prior audio take).
+  ipcMain.handle('ld:versions:read', async (_e, req: { path: string; versionId: string }): Promise<string | null> => {
+    const dir = await projectDir();
+    if (!dir) return null;
+    return readAsDataUrl(versionFilePath(dir, req.path, req.versionId), resolvePath(dir));
   });
 
   // ── Bays / posture ──
