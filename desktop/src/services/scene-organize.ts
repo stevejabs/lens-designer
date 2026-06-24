@@ -31,8 +31,11 @@ const PREAMBLE =
 
 // Infrastructure that must stay at scene root. Matched by name OR by a
 // component type that only makes sense at root (camera/light/tracking/SIK).
+// AiPreviewAgent / AgentInspect is CLAD's own preview-inspection helper (the
+// AgentInspectScript hook CLAD queries the live preview through) — tooling, not
+// app content, so it stays at root.
 const INFRA_CLASSIFIER =
-  'const INFRA_NAME = /camera|lighting|^light$|spectaclesinteractionkit|interaction\\s*kit|device\\s*tracking|world\\s*query|main\\s*camera/i;' +
+  'const INFRA_NAME = /camera|lighting|^light$|spectaclesinteractionkit|interaction\\s*kit|device\\s*tracking|world\\s*query|main\\s*camera|aipreview|agentinspect|previewagent/i;' +
   'const INFRA_COMP = /^(Camera|LightSource|DeviceTracking|DeviceTrackingComponent)$/;' +
   'function isInfra(o: any): boolean {' +
   '  if (INFRA_NAME.test(o.name)) return true;' +
