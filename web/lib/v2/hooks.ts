@@ -215,6 +215,29 @@ export function useFileUrl(path: string | null): string | null {
   return url;
 }
 
+/** The open project's name (basename of its dir), refreshed whenever the
+ *  connection (re)connects — so switching projects + reconnecting updates it. */
+export function useProjectName(): string | null {
+  const [name, setName] = useState<string | null>(null);
+  const conn = useConnection();
+  const port = conn.kind === 'connected' ? conn.port : null;
+
+  useEffect(() => {
+    const ld = getLd();
+    if (!ld || conn.kind !== 'connected') return;
+    let alive = true;
+    void ld.project.dir().then((dir) => {
+      if (!alive) return;
+      setName(dir ? (dir.replace(/\/+$/, '').split('/').pop() ?? null) : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [conn.kind, port]);
+
+  return name;
+}
+
 /** Live LS connection state from the desktop shell (disconnected in browser). */
 export function useConnection(): LDConnState {
   const [state, setState] = useState<LDConnState>({ kind: 'disconnected' });

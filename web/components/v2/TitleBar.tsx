@@ -3,7 +3,7 @@
 import { ChevronDown, Sparkles, PanelRight, Cable } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { cn } from '@/lib/v2/cn';
-import { useConnection } from '@/lib/v2/hooks';
+import { useConnection, useProjectName } from '@/lib/v2/hooks';
 import { getLd } from '@/lib/v2/native';
 import { Logo } from './ui/Logo';
 import { IconButton, Pill } from './ui/Primitives';
@@ -81,9 +81,10 @@ export function TitleBar() {
   const toggleInspector = useUiStore((s) => s.toggleInspector);
   const agentOpen = useUiStore((s) => s.agentOpen);
   const inspectorOpen = useUiStore((s) => s.inspectorOpen);
+  const projectName = useProjectName();
 
   return (
-    <header className="drag-region relative z-20 flex items-center h-11 pl-20 pr-3 gap-3 border-b border-subtle bg-bg-0/80 glass">
+    <header className="drag-region relative z-20 flex items-center h-11 px-3 gap-3 border-b border-subtle bg-bg-0/80 glass">
       {/* Brand + project */}
       <div className="flex items-center gap-2.5">
         <Logo size={22} />
@@ -96,7 +97,7 @@ export function TitleBar() {
       <div className="w-px h-5 bg-border-subtle" />
 
       <button className="no-drag flex items-center gap-1.5 h-7 px-2 rounded-md hover:bg-bg-3 transition-colors text-text-secondary">
-        <span className="text-sm font-medium text-text-primary">ld-specs-test</span>
+        <span className="text-sm font-medium text-text-primary">{projectName ?? 'No project'}</span>
         <ChevronDown className="w-3.5 h-3.5 text-text-tertiary" />
       </button>
 
