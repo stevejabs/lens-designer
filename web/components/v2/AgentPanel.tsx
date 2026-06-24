@@ -7,6 +7,7 @@ import { useAgentStore, type Thread, type ThreadStatus } from '@/lib/v2/agent-st
 import { getLd } from '@/lib/v2/native';
 import type { AgentMessage } from '@/lib/v2/types';
 import { Pill } from './ui/Primitives';
+import { AutoTextarea } from './ui/AutoTextarea';
 
 function ToolRow({ msg }: { msg: AgentMessage }) {
   return (
@@ -255,22 +256,16 @@ export function AgentPanel() {
             active.draft ? 'border-strong glow-ring' : 'border-default',
           )}
         >
-          <textarea
+          <AutoTextarea
             value={active.draft}
-            onChange={(e) => setDraft(active.id, e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            rows={2}
+            onChange={(v) => setDraft(active.id, v)}
+            onSubmit={submit}
             placeholder={active.mode === 'create' ? `Describe the ${active.kind}…` : 'Describe what to build or change…'}
-            className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-sm text-text-primary placeholder:text-text-tertiary outline-none"
+            className="w-full bg-transparent px-3 pt-2.5 pb-1 text-sm text-text-primary placeholder:text-text-tertiary"
           />
           <div className="flex items-center justify-between px-2.5 pb-2">
             <span className="text-2xs text-text-tertiary">
-              {cliConnected ? 'Routes to CLAD via your CLI · ⌘↵' : 'Open in the desktop app to run'}
+              {cliConnected ? 'Routes to CLAD via your CLI · ↵ to send' : 'Open in the desktop app to run'}
             </span>
             {running ? (
               <button

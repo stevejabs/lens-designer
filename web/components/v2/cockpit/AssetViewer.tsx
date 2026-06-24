@@ -18,6 +18,7 @@ import { useUiStore } from '@/lib/v2/ui-store';
 import { useAgentStore } from '@/lib/v2/agent-store';
 import type { AssetItem } from '@/lib/v2/types';
 import { Button, Pill, SectionLabel } from '../ui/Primitives';
+import { AutoTextarea } from '../ui/AutoTextarea';
 import { GLBViewer } from './GLBViewer';
 
 function relAge(ms: number): string {
@@ -245,22 +246,17 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
           {asset.prompt && (
             <p className="text-xs text-text-tertiary mb-2 italic">“{asset.prompt}”</p>
           )}
-          <div className="flex items-center gap-2">
-            <input
+          <div className="flex items-end gap-2">
+            <AutoTextarea
               value={refinePrompt}
-              onChange={(e) => setRefinePrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  submitRefine();
-                }
-              }}
+              onChange={setRefinePrompt}
+              onSubmit={submitRefine}
               placeholder={
                 asset.kind === 'mesh'
                   ? 'e.g. make it smaller and more cartoonish'
                   : 'e.g. make it warmer and shorter'
               }
-              className="flex-1 h-9 px-3 rounded-md bg-bg-2 border border-default text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-strong"
+              className="flex-1 min-h-9 py-2 px-3 rounded-md bg-bg-2 border border-default text-sm text-text-primary placeholder:text-text-tertiary focus:border-strong"
             />
             <Button variant="primary" size="md" icon={<Sparkles />} onClick={submitRefine} disabled={!refinePrompt.trim()}>
               Refine
