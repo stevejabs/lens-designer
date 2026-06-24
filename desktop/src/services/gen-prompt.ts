@@ -58,6 +58,30 @@ export function buildCreatePrompt(input: CreatePromptInput): string {
   return input.userText.trim();
 }
 
+/** Refine prompt for a CODE-AUTHORED mesh (a TypeScript BaseScriptComponent
+ *  that builds geometry). Unlike a GLB, the fix is a code edit in place — not a
+ *  regeneration — so this routes to editing the .ts directly and keeps it a
+ *  scripted mesh with its existing controls. */
+export function buildScriptMeshRefinePrompt(input: {
+  artifactPath: string;
+  userText: string;
+  priorPrompt?: string | undefined;
+}): string {
+  const lines: string[] = [];
+  lines.push(
+    `A code-authored 3D mesh (a TypeScript BaseScriptComponent that builds geometry with ` +
+      `MeshBuilder / RenderMeshVisual) already exists at this exact path: ${input.artifactPath}`,
+  );
+  if (input.priorPrompt) lines.push(`It was originally described as: "${input.priorPrompt.trim()}"`);
+  lines.push(`Edit that TypeScript file in place to apply this change: ${input.userText.trim()}`);
+  lines.push(
+    `Keep it a code-authored mesh — do NOT replace it with a GLB, a new file, or a new path. ` +
+      `Preserve its existing @input controls and public runtime setters. Recompile the project ` +
+      `TypeScript when done so Lens Studio picks up the change.`,
+  );
+  return lines.join('\n');
+}
+
 /** Build the prompt for refining an EXISTING artifact in place.
  *  Reuses the original skill and pins the exact output path. */
 export function buildRefinePrompt(input: RefinePromptInput): string {

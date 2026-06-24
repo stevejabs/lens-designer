@@ -35,6 +35,7 @@ function toAssetItem(a: LDScannedAsset): AssetItem {
     id: a.id,
     name: a.name,
     kind: a.kind,
+    backend: a.backend,
     status: 'ready',
     origin: a.origin,
     ...(a.prompt ? { prompt: a.prompt } : {}),
@@ -127,6 +128,41 @@ export function usePreview(): { image: string | null; capturing: boolean; captur
   }, [capture, artifactNonce, conn.kind, activeArtifact?.path]);
 
   return { image, capturing, capture };
+}
+
+/** Render a code-authored (scripted) mesh: load it into the edit bay so it's
+ *  isolated, then capture the live Lens Studio preview. Unlike a GLB we can't
+ *  render the TS in three.js — Lens Studio runs the script and we screenshot it. */
+export function useScriptMeshPreview(path: string | null): {
+  image: string | null;
+  loading: boolean;
+  render: () => void;
+} {
+  const [image, setImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const conn = useConnection();
+
+  const render = useCallback(() => {
+    const ld = getLd();
+    if (!ld || !path) return;
+    setLoading(true);
+    void ld.view
+      .load(path) // isolate this script under the edit bay (design posture)
+      .then(() => new Promise((r) => setTimeout(r, 700))) // let LS attach + run onAwake
+      .then(() => ld.preview.capture())
+      .then((img) => {
+        if (img) setImage(img);
+      })
+      .finally(() => setLoading(false));
+  }, [path]);
+
+  // Auto-render when a script-mesh is opened in the viewer and we're connected.
+  useEffect(() => {
+    setImage(null);
+    if (conn.kind === 'connected' && path) render();
+  }, [render, conn.kind, path]);
+
+  return { image, loading, render };
 }
 
 /** Editable design constants parsed from a view's source. */

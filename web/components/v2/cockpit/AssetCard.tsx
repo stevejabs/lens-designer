@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Play,
   Pause,
+  Code2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
@@ -58,6 +59,21 @@ function MeshThumb({ asset }: { asset: AssetItem }) {
       ) : (
         <Box className="relative w-8 h-8 text-text-secondary" strokeWidth={1.4} />
       )}
+    </div>
+  );
+}
+
+/** Thumbnail for a code-authored mesh — it renders in Lens Studio (live
+ *  preview), not three.js, so the card shows a script badge; the full render
+ *  happens in the viewer when opened. */
+function ScriptMeshThumb() {
+  return (
+    <div className="relative flex items-center justify-center h-24 rounded-md bg-gradient-to-br from-bg-1 to-bg-2 overflow-hidden">
+      {gridBg}
+      <Box className="relative w-8 h-8 text-text-secondary" strokeWidth={1.4} />
+      <span className="absolute top-1.5 left-1.5 flex items-center gap-1 text-2xs text-accent-300/90 px-1.5 py-0.5 rounded bg-[rgba(34,211,238,0.08)] border border-[rgba(34,211,238,0.15)]">
+        <Code2 className="w-3 h-3" /> script
+      </span>
     </div>
   );
 }
@@ -131,7 +147,9 @@ function Thumb({ asset }: { asset: AssetItem }) {
       </div>
     );
   }
-  if (asset.kind === 'mesh') return <MeshThumb asset={asset} />;
+  if (asset.kind === 'mesh') {
+    return asset.backend === 'script' ? <ScriptMeshThumb /> : <MeshThumb asset={asset} />;
+  }
   return <AudioThumb asset={asset} />;
 }
 

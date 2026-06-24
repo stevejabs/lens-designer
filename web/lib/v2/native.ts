@@ -51,6 +51,7 @@ export interface LDScannedAsset {
   id: string;
   name: string;
   kind: 'mesh' | 'music' | 'sfx';
+  backend: 'glb' | 'script' | 'audio';
   path: string;
   origin: 'prompt' | 'import';
   updatedMs: number;

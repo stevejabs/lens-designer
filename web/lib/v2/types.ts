@@ -10,10 +10,14 @@ export type AssetKind = 'mesh' | 'music' | 'sfx';
 
 export type AssetStatus = 'ready' | 'generating' | 'failed';
 
+export type AssetBackend = 'glb' | 'script' | 'audio';
+
 export interface AssetItem {
   id: string;
   name: string;
   kind: AssetKind;
+  /** How a mesh is realized: baked GLB vs. code-authored TS script. */
+  backend: AssetBackend;
   status: AssetStatus;
   /** Short human summary of how it was made (from the distilled context). */
   origin: 'prompt' | 'import';

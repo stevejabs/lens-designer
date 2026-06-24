@@ -21,7 +21,13 @@ import { scanViews } from './services/views.js';
 import { capturePreview, readViewSource, saveViewSource, recompile } from './services/scene-ops.js';
 import { parseViewFields, setViewField, type FieldKind } from './services/view-parse.js';
 import { readContext, appendTurn, recordCreation } from './services/context-store.js';
-import { buildCreatePrompt, buildRefinePrompt, SKILL_FOR_KIND, type GenKind } from './services/gen-prompt.js';
+import {
+  buildCreatePrompt,
+  buildRefinePrompt,
+  buildScriptMeshRefinePrompt,
+  SKILL_FOR_KIND,
+  type GenKind,
+} from './services/gen-prompt.js';
 import {
   ensureBays,
   setBayPosture,
@@ -256,22 +262,29 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
   ipcMain.handle('ld:asset:refine', async (_e, req: { artifactPath: string; userText: string }) => {
     const dir = (await projectDir()) ?? process.cwd();
     const ctx = await readContext(req.artifactPath);
-    const kind = (ctx?.genParams?.['kind'] as GenKind | undefined) ?? kindFor(req.artifactPath) ?? 'mesh';
-    const skill = ctx?.genParams?.['skill'] || SKILL_FOR_KIND[kind] || undefined;
     const priorPrompt = ctx?.promptHistory?.[ctx.promptHistory.length - 1];
+    // A code-authored (scripted) mesh is a .ts file — refine edits the code in
+    // place rather than regenerating a GLB via /build-mesh.
+    const isScript = req.artifactPath.toLowerCase().endsWith('.ts');
+    const kind: GenKind = isScript
+      ? 'code'
+      : (ctx?.genParams?.['kind'] as GenKind | undefined) ?? kindFor(req.artifactPath) ?? 'mesh';
+    const skill = ctx?.genParams?.['skill'] || SKILL_FOR_KIND[kind] || undefined;
 
-    // Snapshot the current bytes BEFORE regeneration so it's restorable, and
+    // Snapshot the current bytes BEFORE the edit so it's restorable, and
     // snapshot the asset file set so we can reconcile a duplicate.
     await snapshotVersion(dir, req.artifactPath, Date.now());
     const before = await snapshotAssets(dir);
 
-    const prompt = buildRefinePrompt({
-      kind,
-      artifactPath: req.artifactPath,
-      userText: req.userText,
-      priorPrompt,
-      skill,
-    });
+    const prompt = isScript
+      ? buildScriptMeshRefinePrompt({ artifactPath: req.artifactPath, userText: req.userText, priorPrompt })
+      : buildRefinePrompt({
+          kind,
+          artifactPath: req.artifactPath,
+          userText: req.userText,
+          priorPrompt,
+          skill,
+        });
     const { jobId, done } = orchestrator.startJob({
       prompt,
       cwd: dir,

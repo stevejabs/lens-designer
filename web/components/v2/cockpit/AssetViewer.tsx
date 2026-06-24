@@ -11,9 +11,12 @@ import {
   MoreHorizontal,
   Box,
   History,
+  Code2,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
-import { useFileUrl, useVersions } from '@/lib/v2/hooks';
+import { useFileUrl, useVersions, useScriptMeshPreview } from '@/lib/v2/hooks';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { useAgentStore } from '@/lib/v2/agent-store';
 import type { AssetItem } from '@/lib/v2/types';
@@ -75,6 +78,51 @@ function MeshStage({ asset, url }: { asset: AssetItem; url: string | null }) {
       </div>
       <span className="absolute bottom-3 left-3 font-num text-2xs text-text-tertiary">
         orbit · scroll to zoom
+      </span>
+    </div>
+  );
+}
+
+/* A code-authored mesh renders in Lens Studio (it's a script that builds
+   geometry at runtime), so we isolate it in the edit bay and show the live LS
+   capture rather than a three.js model. */
+function ScriptMeshStage({ asset }: { asset: AssetItem }) {
+  const { image, loading, render } = useScriptMeshPreview(asset.id);
+  return (
+    <div className="relative flex items-center justify-center flex-1 rounded-xl overflow-hidden bg-bg-canvas border border-subtle">
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="Live Lens Studio preview" className="max-h-full max-w-full object-contain" />
+      ) : (
+        <div className="flex flex-col items-center gap-2 text-text-tertiary">
+          {loading ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin text-accent-400" />
+              <span className="text-xs">Rendering in Lens Studio…</span>
+            </>
+          ) : (
+            <>
+              <Box className="w-12 h-12" strokeWidth={1} />
+              <span className="text-xs">Open to render</span>
+            </>
+          )}
+        </div>
+      )}
+      <div className="absolute top-3 left-3">
+        <Pill tone="accent">
+          <Code2 className="w-3 h-3" /> Scripted mesh
+        </Pill>
+      </div>
+      <button
+        onClick={render}
+        disabled={loading}
+        title="Re-render in Lens Studio"
+        className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-md glass border border-subtle text-text-tertiary hover:text-text-primary transition-colors disabled:opacity-40"
+      >
+        <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+      </button>
+      <span className="absolute bottom-3 left-3 font-num text-2xs text-text-tertiary">
+        rendered live in Lens Studio
       </span>
     </div>
   );
@@ -175,8 +223,9 @@ function AudioStage({ asset, url }: { asset: AssetItem; url: string | null }) {
 }
 
 export function AssetViewer({ asset }: { asset: AssetItem | null }) {
-  // Real file bytes for the selected asset (null in the browser / for mock ids).
-  const url = useFileUrl(asset?.id ?? null);
+  const isScriptMesh = asset?.kind === 'mesh' && asset.backend === 'script';
+  // Real file bytes for GLB/audio. Scripted meshes render via LS, not bytes.
+  const url = useFileUrl(asset && !isScriptMesh ? asset.id : null);
   const refineAsset = useAgentStore((s) => s.refineAsset);
   const setAgentOpen = useUiStore((s) => s.setAgentOpen);
   const { versions, restore } = useVersions(asset?.id ?? null);
@@ -208,7 +257,8 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
         <div>
           <h2 className="text-lg font-semibold text-text-primary tracking-tight">{asset.name}</h2>
           <p className="text-xs text-text-tertiary capitalize">
-            {asset.kind} · {asset.origin === 'prompt' ? 'AI generated' : 'imported'}
+            {isScriptMesh ? 'Scripted mesh' : asset.kind} ·{' '}
+            {asset.origin === 'prompt' ? 'AI generated' : 'imported'}
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -220,7 +270,15 @@ export function AssetViewer({ asset }: { asset: AssetItem | null }) {
       </div>
 
       {/* stage */}
-      {asset.kind === 'mesh' ? <MeshStage asset={asset} url={url} /> : <AudioStage asset={asset} url={url} />}
+      {asset.kind === 'mesh' ? (
+        isScriptMesh ? (
+          <ScriptMeshStage asset={asset} />
+        ) : (
+          <MeshStage asset={asset} url={url} />
+        )
+      ) : (
+        <AudioStage asset={asset} url={url} />
+      )}
 
       {/* meta */}
       {asset.meta && (
