@@ -249,6 +249,12 @@ export interface LDApi {
     list(): Promise<LDJobRecord[]>;
     cancel(jobId: string): Promise<void>;
   };
+  build: {
+    plan(req: { prompt: string }): Promise<{
+      summary: string;
+      steps: { kind: 'mesh' | 'music' | 'sfx' | 'ui'; name: string; description: string }[];
+    }>;
+  };
   posture: {
     set(posture: 'design' | 'runtime'): Promise<{ editEnabled: boolean; appEnabled: boolean }>;
   };
@@ -335,6 +341,13 @@ const ld: LDApi = {
   jobs: {
     list: () => ipcRenderer.invoke('ld:jobs:list') as Promise<LDJobRecord[]>,
     cancel: (jobId) => ipcRenderer.invoke('ld:jobs:cancel', jobId) as Promise<void>,
+  },
+  build: {
+    plan: (req) =>
+      ipcRenderer.invoke('ld:build:plan', req) as Promise<{
+        summary: string;
+        steps: { kind: 'mesh' | 'music' | 'sfx' | 'ui'; name: string; description: string }[];
+      }>,
   },
   posture: {
     set: (posture) =>

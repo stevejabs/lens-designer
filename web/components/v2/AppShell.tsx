@@ -9,6 +9,7 @@ import { AgentPanel } from './AgentPanel';
 import { AssetCockpit } from './cockpit/AssetCockpit';
 import { Designer } from './designer/Designer';
 import { OnboardingModal } from './OnboardingModal';
+import { BuildProgress } from './BuildProgress';
 
 export function AppShell() {
   const mode = useUiStore((s) => s.mode);
@@ -38,6 +39,7 @@ export function AppShell() {
         {agentOpen && <AgentPanel />}
       </div>
       <OnboardingModal />
+      <BuildProgress />
     </div>
   );
 }

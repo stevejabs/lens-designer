@@ -38,6 +38,7 @@ import {
   type BayPosture,
 } from './services/bays.js';
 import { planSceneOrganization, organizeSceneIntoAppBay } from './services/scene-organize.js';
+import { buildPlanPrompt, parseManifest } from './services/build-plan.js';
 import { snapshotAssets, detectCreated, reconcileRefine } from './services/asset-watch.js';
 import { snapshot as snapshotVersion, listVersions, restoreVersion } from './services/versions.js';
 import type { JobMeta, JobMode } from './services/jobs.js';
@@ -221,6 +222,13 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
   ipcMain.handle('ld:project:organize', () =>
     orchestrator.runDirect((c) => organizeSceneIntoAppBay(c), { write: true }),
   );
+
+  // ── Build planner: prompt → manifest of generation steps ──
+  ipcMain.handle('ld:build:plan', async (_e, req: { prompt: string }) => {
+    const dir = (await projectDir()) ?? process.cwd();
+    const text = await orchestrator.planText(buildPlanPrompt(req.prompt), dir);
+    return parseManifest(text) ?? { summary: '', steps: [] };
+  });
 
   // ── Jobs ──
   ipcMain.handle('ld:jobs:list', () => orchestrator.listJobs());

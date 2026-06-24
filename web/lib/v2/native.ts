@@ -47,6 +47,17 @@ export interface LDVersionEntry {
   sizeBytes: number;
 }
 
+export type LDBuildStepKind = 'mesh' | 'music' | 'sfx' | 'ui';
+export interface LDBuildStep {
+  kind: LDBuildStepKind;
+  name: string;
+  description: string;
+}
+export interface LDBuildManifest {
+  summary: string;
+  steps: LDBuildStep[];
+}
+
 export interface LDScannedAsset {
   id: string;
   name: string;
@@ -122,6 +133,9 @@ export interface LDApi {
   jobs: {
     list(): Promise<LDJobRecord[]>;
     cancel(jobId: string): Promise<void>;
+  };
+  build: {
+    plan(req: { prompt: string }): Promise<LDBuildManifest>;
   };
   posture: {
     set(posture: 'design' | 'runtime'): Promise<{ editEnabled: boolean; appEnabled: boolean }>;

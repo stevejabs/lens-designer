@@ -154,6 +154,29 @@ export class Orchestrator extends EventEmitter {
     this.jobs.get(jobId)?.cancel();
   }
 
+  /** Run a single silent, tool-less planning turn and return its final text.
+   *  Not tracked as a job (no UI thread, no scene access) — used to turn a
+   *  build prompt into a manifest before the real per-step jobs fire. */
+  planText(prompt: string, cwd: string): Promise<string> {
+    return new Promise((resolve) => {
+      let text = '';
+      const handle = this.agent.run({
+        prompt,
+        cwd,
+        allowedTools: [], // no tools — force a text-only manifest, mutate nothing
+        maxTurns: 1,
+        onEvent: (e) => {
+          if (e.kind === 'result' && e.text) text = e.text;
+          else if (e.kind === 'assistant' && e.text) text = e.text;
+        },
+      });
+      handle.done.then(
+        () => resolve(text),
+        () => resolve(text),
+      );
+    });
+  }
+
   /** Run a deterministic MCP op. Reads run immediately; writes take the
    *  scene-write lease so they never overlap a scene-mutating agent job. */
   runDirect<T>(fn: (client: import('./mcp-client.js').McpClient) => Promise<T>, opts?: { write?: boolean }): Promise<T> {

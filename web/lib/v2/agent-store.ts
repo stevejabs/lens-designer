@@ -7,9 +7,19 @@
 // an independent conversation with its own session, status, and draft.
 
 import { create } from 'zustand';
-import { getLd, type LDAgentEvent, type LDJobMeta, type LDJobKind } from './native';
+import { getLd, type LDAgentEvent, type LDJobMeta, type LDJobKind, type LDBuildStepKind } from './native';
 import { useUiStore } from './ui-store';
 import type { AgentMessage, AssetItem } from './types';
+
+export type BuildPhase = 'idle' | 'planning' | 'building' | 'done' | 'error';
+export interface BuildSession {
+  phase: BuildPhase;
+  prompt: string;
+  summary: string;
+  /** Threads (one per manifest step) whose statuses drive the progress UI. */
+  stepThreadIds: string[];
+  error?: string;
+}
 
 export type ThreadMode = 'create' | 'refine' | 'chat';
 export type ThreadStatus = 'idle' | 'running' | 'done' | 'error';
@@ -65,6 +75,7 @@ function blankThread(partial: Partial<Thread> = {}): Thread {
 interface AgentState {
   threads: Thread[];
   activeId: string | null;
+  build: BuildSession;
 
   setActive: (id: string) => void;
   newChat: () => string;
@@ -78,17 +89,26 @@ interface AgentState {
   refineAsset: (asset: AssetItem, text: string) => void;
   cancel: (id: string) => void;
 
+  /** Orchestrate a whole-experience build: plan a manifest, then fire one
+   *  tracked job per step. Progress is read off the per-step threads. */
+  startBuild: (prompt: string) => Promise<void>;
+  dismissBuild: () => void;
+
   // internal
   _patch: (id: string, fn: (t: Thread) => Thread) => void;
   _byJob: (jobId: string) => Thread | undefined;
   _failThread: (id: string, err: Error) => void;
+  _checkBuildDone: () => void;
   _onEvent: (e: LDAgentEvent) => void;
   _onMeta: (m: LDJobMeta) => void;
 }
 
+const IDLE_BUILD: BuildSession = { phase: 'idle', prompt: '', summary: '', stepThreadIds: [] };
+
 export const useAgentStore = create<AgentState>((set, get) => ({
   threads: [blankThread()],
   activeId: null,
+  build: IDLE_BUILD,
 
   setActive: (id) => set({ activeId: id }),
 
@@ -224,10 +244,57 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     get()._patch(id, (x) => ({ ...x, status: 'idle' }));
   },
 
+  startBuild: async (prompt) => {
+    set({ build: { phase: 'planning', prompt, summary: '', stepThreadIds: [] } });
+    const ld = getLd();
+    if (!ld) {
+      set({ build: { phase: 'error', prompt, summary: '', stepThreadIds: [], error: 'Open the desktop app to build.' } });
+      return;
+    }
+    let manifest;
+    try {
+      manifest = await ld.build.plan({ prompt });
+    } catch (err) {
+      set({ build: { phase: 'error', prompt, summary: '', stepThreadIds: [], error: (err as Error).message } });
+      return;
+    }
+    if (!manifest.steps.length) {
+      set({ build: { phase: 'error', prompt, summary: '', stepThreadIds: [], error: 'The planner returned no steps. Try a more specific prompt.' } });
+      return;
+    }
+    // One tracked thread + create job per manifest step. They run concurrently
+    // (asset jobs free; UI jobs serialize on the scene lease in the bridge).
+    const ids: string[] = [];
+    for (const step of manifest.steps) {
+      const t = blankThread({
+        kind: step.kind as LDJobKind,
+        mode: 'create',
+        title: step.name,
+      });
+      set((s) => ({ threads: [...s.threads, t] }));
+      ids.push(t.id);
+      get().send(t.id, step.description);
+    }
+    set({ build: { phase: 'building', prompt, summary: manifest.summary, stepThreadIds: ids } });
+  },
+
+  dismissBuild: () => set({ build: IDLE_BUILD }),
+
   _patch: (id, fn) =>
     set((s) => ({ threads: s.threads.map((t) => (t.id === id ? fn(t) : t)) })),
 
   _byJob: (jobId) => get().threads.find((t) => t.currentJobId === jobId),
+
+  _checkBuildDone: () => {
+    const { build, threads } = get();
+    if (build.phase !== 'building') return;
+    const steps = build.stepThreadIds
+      .map((id) => threads.find((t) => t.id === id))
+      .filter((t): t is Thread => t !== undefined);
+    if (steps.length > 0 && steps.every((t) => t.status === 'done' || t.status === 'error')) {
+      set({ build: { ...build, phase: 'done' } });
+    }
+  },
 
   _failThread: (id, err) =>
     get()._patch(id, (t) => ({
@@ -309,11 +376,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     if (m.artifactPath) {
       const ui = useUiStore.getState();
       const t = thread;
-      if (t?.mode === 'create') {
+      // Don't yank selection around mid-build (many assets land); only jump to
+      // a created asset for a standalone create.
+      if (t?.mode === 'create' && get().build.phase !== 'building') {
         ui.selectAsset(m.artifactPath);
         ui.setActiveArtifact({ path: m.artifactPath, id: m.artifactPath, name: m.artifactPath.split('/').pop() ?? '', kind: 'asset' });
       }
     }
+    get()._checkBuildDone();
   },
 }));
 

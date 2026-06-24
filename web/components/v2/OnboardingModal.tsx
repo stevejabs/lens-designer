@@ -12,20 +12,18 @@ import { Button } from './ui/Primitives';
  *  CLAD build for an empty project. */
 export function OnboardingModal() {
   const { state, busy, organize, dismiss } = useOnboarding();
-  const newChat = useAgentStore((s) => s.newChat);
-  const send = useAgentStore((s) => s.send);
+  const startBuild = useAgentStore((s) => s.startBuild);
   const setAgentOpen = useUiStore((s) => s.setAgentOpen);
   const [buildPrompt, setBuildPrompt] = useState('');
 
   if (state.kind === 'none') return null;
 
-  const startBuild = (): void => {
+  const onBuild = (): void => {
     const text = buildPrompt.trim();
     if (!text) return;
     setAgentOpen(true);
-    const id = newChat();
-    send(id, `Build this Specs experience: ${text}`);
-    dismiss();
+    dismiss(); // close onboarding; BuildProgress takes over
+    void startBuild(text);
   };
 
   return (
@@ -122,7 +120,7 @@ export function OnboardingModal() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  startBuild();
+                  onBuild();
                 }
               }}
               rows={3}
@@ -134,7 +132,7 @@ export function OnboardingModal() {
               <Button variant="ghost" size="md" onClick={dismiss}>
                 I’ll start from scratch
               </Button>
-              <Button variant="primary" size="md" onClick={startBuild} disabled={!buildPrompt.trim()}>
+              <Button variant="primary" size="md" onClick={onBuild} disabled={!buildPrompt.trim()}>
                 Build it <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
