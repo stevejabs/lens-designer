@@ -42,6 +42,10 @@ function project(
   fovDeg: number,
   aspect: number,
 ): Box[] {
+  // Calibrated against the live Specs preview: the panel-capture's effective
+  // vertical FOV is a bit wider than the camera's reported fov, so vertical
+  // displacement is scaled to keep boxes on their elements (verified visually).
+  const V_CORRECTION = 0.88;
   const out: Box[] = [];
   for (const el of els) {
     const type = deriveType(el.componentTypes);
@@ -50,7 +54,7 @@ function project(
     const halfV = d * Math.tan(((fovDeg / 2) * Math.PI) / 180);
     const halfH = halfV * aspect;
     const xFrac = 0.5 + (el.x / halfH) * 0.5;
-    const yFrac = 0.5 - (el.y / halfV) * 0.5;
+    const yFrac = 0.5 - ((el.y / halfV) * V_CORRECTION) * 0.5;
     const [cmW, cmH] = SIZE_CM[type] ?? [6, 4];
     out.push({
       el,
@@ -58,7 +62,7 @@ function project(
       left: xFrac * 100,
       top: yFrac * 100,
       w: (cmW / (2 * halfH)) * 100,
-      h: (cmH / (2 * halfV)) * 100,
+      h: (cmH / (2 * halfV)) * V_CORRECTION * 100,
     });
   }
   // Panel first (behind), then the rest.
