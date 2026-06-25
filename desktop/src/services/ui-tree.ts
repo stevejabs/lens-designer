@@ -94,6 +94,34 @@ export async function readElementTree(client: McpClient): Promise<ElementTree> {
   return { ok: true, host: host.name, tree: root };
 }
 
+/** Capture the loaded view ISOLATED + auto-framed (object mode), so it's always
+ *  shown in view regardless of camera placement — unlike a panel screenshot,
+ *  where the world-space UI can be off-frame or occluded. Returns a data URL. */
+export async function captureLoadedView(
+  client: McpClient,
+  detail: 'low' | 'medium' | 'high' = 'high',
+): Promise<string | null> {
+  const found = await query<{ sceneObjects?: { matches?: { summary: RuntimeSummary }[] } }>(
+    client,
+    '{ sceneObjects(filter: {nameContains: "__LDView__"}) { matches { summary } } }',
+  );
+  const matches = found?.sceneObjects?.matches ?? [];
+  const host = matches.find((m) => m.summary.enabled)?.summary ?? matches[0]?.summary;
+  if (!host) return null;
+  try {
+    const blocks = await client.callToolRaw('CaptureRuntimeViewTool', {
+      uniqueIds: [host.uniqueId],
+      isolate: true,
+      detail,
+    });
+    const img = blocks.find((b) => b.type === 'image' && b.data);
+    if (!img?.data) return null;
+    return `data:${img.mimeType ?? 'image/jpeg'};base64,${img.data}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Read the live property values of an element (merged across its readable
  *  runtime components — Text, Image, RenderMeshVisual, …). Used to pre-fill the
  *  inspector with the element's current state. UIKit script components

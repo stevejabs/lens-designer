@@ -275,6 +275,36 @@ export function useScriptMeshPreview(path: string | null): {
   return { image, loading, render };
 }
 
+/** Isolated, auto-framed render of the loaded view — always in-frame (object
+ *  mode), the editor canvas surface. Distinct from usePreview (full LS scene). */
+export function useViewRender(): { image: string | null; capturing: boolean; capture: () => void } {
+  const [image, setImage] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+  const activeArtifact = useUiStore((s) => s.activeArtifact);
+  const conn = useConnection();
+
+  const capture = useCallback(() => {
+    const ld = getLd();
+    if (!ld) return;
+    setCapturing(true);
+    void ld.ui
+      .capture()
+      .then((img) => {
+        if (img) setImage(img);
+      })
+      .finally(() => setCapturing(false));
+  }, []);
+
+  useEffect(() => {
+    if (conn.kind !== 'connected') return;
+    const t = setTimeout(capture, 700); // runtime render settles after a load
+    return () => clearTimeout(t);
+  }, [capture, conn.kind, artifactNonce, activeArtifact?.path]);
+
+  return { image, capturing, capture };
+}
+
 /** Editable design constants parsed from a view's source. */
 export function useViewFields(path: string | null): {
   fields: LDViewField[];

@@ -38,7 +38,7 @@ import {
   type BayPosture,
 } from './services/bays.js';
 import { planSceneOrganization, organizeSceneIntoAppBay } from './services/scene-organize.js';
-import { readElementTree, readElementProperties } from './services/ui-tree.js';
+import { readElementTree, readElementProperties, captureLoadedView } from './services/ui-tree.js';
 import { buildPlanPrompt, parseManifest } from './services/build-plan.js';
 import { snapshotAssets, detectCreated, reconcileRefine } from './services/asset-watch.js';
 import { snapshot as snapshotVersion, listVersions, restoreVersion, versionFilePath } from './services/versions.js';
@@ -228,6 +228,8 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
   ipcMain.handle('ld:ui:props', (_e, uniqueId: string) =>
     orchestrator.runDirect((c) => readElementProperties(c, uniqueId)),
   );
+  // Isolated, auto-framed render of the loaded view (always in-frame).
+  ipcMain.handle('ld:ui:capture', () => orchestrator.runDirect((c) => captureLoadedView(c)));
 
   // ── Project onboarding: organize an existing scene into the app bay ──
   // Read-only plan (content vs. infrastructure) for the confirmation dialog.

@@ -162,6 +162,7 @@ export interface LDApi {
   ui: {
     tree(): Promise<LDElementTree>;
     props(uniqueId: string): Promise<Record<string, unknown>>;
+    capture(): Promise<string | null>;
   };
   onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
   asset: {
