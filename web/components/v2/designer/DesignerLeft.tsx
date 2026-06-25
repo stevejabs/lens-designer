@@ -23,16 +23,16 @@ import { cn } from '@/lib/v2/cn';
 import { useViews } from '@/lib/v2/hooks';
 import { SectionLabel } from '../ui/Primitives';
 
-const PALETTE: { label: string; icon: LucideIcon }[] = [
-  { label: 'Frame', icon: Square },
-  { label: 'BackPlate', icon: RectangleHorizontal },
-  { label: 'Flex', icon: Rows3 },
-  { label: 'Grid', icon: Grid3x3 },
-  { label: 'Text', icon: Type },
-  { label: 'Button', icon: RectangleHorizontal },
-  { label: 'Switch', icon: ToggleRight },
-  { label: 'Slider', icon: SlidersHorizontal },
-  { label: 'Image', icon: Image },
+const PALETTE: { label: string; type: string; icon: LucideIcon }[] = [
+  { label: 'Frame', type: 'Frame', icon: Square },
+  { label: 'BackPlate', type: 'BackPlate', icon: RectangleHorizontal },
+  { label: 'Flex', type: 'FlexLayout', icon: Rows3 },
+  { label: 'Grid', type: 'GridLayout', icon: Grid3x3 },
+  { label: 'Text', type: 'Text', icon: Type },
+  { label: 'Button', type: 'Button', icon: RectangleHorizontal },
+  { label: 'Switch', type: 'Switch', icon: ToggleRight },
+  { label: 'Slider', type: 'Slider', icon: SlidersHorizontal },
+  { label: 'Image', type: 'Image', icon: Image },
 ];
 
 export function DesignerLeft() {
@@ -109,7 +109,7 @@ export function DesignerLeft() {
         <ElementTree />
       </div>
 
-      {/* Palette */}
+      {/* Palette — drag a component onto the editor canvas to add it */}
       <div className="px-4 pt-3 pb-2 border-t border-subtle">
         <SectionLabel>Components</SectionLabel>
       </div>
@@ -118,7 +118,13 @@ export function DesignerLeft() {
           {PALETTE.map((p) => (
             <button
               key={p.label}
-              className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border border-subtle bg-bg-1 hover:bg-bg-2 hover:border-default transition-all duration-150 ease-spring group"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('ld/add', p.type);
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              title={`Drag ${p.label} onto the canvas`}
+              className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg border border-subtle bg-bg-1 hover:bg-bg-2 hover:border-default transition-all duration-150 ease-spring group cursor-grab active:cursor-grabbing"
             >
               <p.icon className="w-4 h-4 text-text-tertiary group-hover:text-accent-400 transition-colors" strokeWidth={1.6} />
               <span className="text-2xs text-text-secondary">{p.label}</span>

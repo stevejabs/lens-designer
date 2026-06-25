@@ -56,6 +56,29 @@ describe('editElement (WYSIWYG write-back)', () => {
     expect(req.prompt).toContain('recompile');
   });
 
+  it('drag-to-add routes an add to the target container', async () => {
+    useAgentStore.getState().addElement({ viewPath: '/v.ts', containerName: 'Content', type: 'Button' });
+    await flush();
+    const req = runArgs[0] as { prompt: string; artifactPath: string };
+    expect(req.artifactPath).toBe('/v.ts');
+    expect(req.prompt).toContain('Add a new Button element');
+    expect(req.prompt).toContain('"Content"');
+  });
+
+  it('drag-to-reorder routes a move with before/after', async () => {
+    useAgentStore.getState().moveElement({ viewPath: '/v.ts', elementName: 'Switch', targetName: 'Label', position: 'before' });
+    await flush();
+    const req = runArgs[0] as { prompt: string };
+    expect(req.prompt).toContain('"Switch" comes before the element named "Label"');
+  });
+
+  it('delete routes a removal', async () => {
+    useAgentStore.getState().deleteElement({ viewPath: '/v.ts', elementName: 'Header' });
+    await flush();
+    const req = runArgs[0] as { prompt: string };
+    expect(req.prompt).toContain('Remove the element named "Header"');
+  });
+
   it('reuses the same thread for repeated edits of one view', async () => {
     const store = useAgentStore.getState();
     store.editElement({ viewPath: '/v.ts', elementName: 'A', elementType: 'Text', changes: [{ label: 'text', value: 'x' }] });

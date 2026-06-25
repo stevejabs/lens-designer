@@ -95,6 +95,12 @@ interface AgentState {
     elementType: string | null;
     changes: { label: string; value: string }[];
   }) => void;
+  /** Drag-and-drop ops, all routed to the agent (edit source → recompile). */
+  addElement: (req: { viewPath: string; containerName: string; type: string }) => void;
+  moveElement: (req: { viewPath: string; elementName: string; targetName: string; position: 'before' | 'after' }) => void;
+  deleteElement: (req: { viewPath: string; elementName: string }) => void;
+  /** Internal: open/reuse a per-view thread and run a source-edit prompt. */
+  _runViewEdit: (viewPath: string, title: string, userLine: string, prompt: string) => void;
   cancel: (id: string) => void;
 
   /** Orchestrate a whole-experience build: plan a manifest, then fire one
@@ -246,31 +252,23 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       .catch((err) => get()._failThread(id, err));
   },
 
-  editElement: ({ viewPath, elementName, elementType, changes }) => {
-    const summary = changes.map((c) => `${c.label} → ${c.value}`).join(', ');
-    const prompt =
-      `In the SpectaclesUIKit view at this exact file path: ${viewPath}\n` +
-      `Modify the element named "${elementName}"${elementType ? ` (a ${elementType})` : ''}: ` +
-      changes.map((c) => `set its ${c.label} to ${c.value}`).join('; ') +
-      `.\nEdit the view's TypeScript source to apply this, then recompile so Lens Studio re-renders it. ` +
-      `Keep every other element unchanged.`;
-
-    // Reuse a thread scoped to this view; else open one.
+  _runViewEdit: (viewPath, title, userLine, prompt) => {
     const existing = get().threads.find((t) => t.artifactPath === viewPath && t.kind === 'ui');
     const id = existing?.id ?? nextThreadId();
     if (!existing) {
-      const t = blankThread({ id, kind: 'ui', mode: 'chat', title: `Edit ${elementName}`, artifactPath: viewPath });
+      const t = blankThread({ id, kind: 'ui', mode: 'chat', title, artifactPath: viewPath });
       set((s) => ({ threads: [...s.threads, t], activeId: id }));
     } else {
       set({ activeId: id });
     }
     get()._patch(id, (t) => ({
       ...t,
+      title,
       status: 'running',
       hasRun: true,
-      messages: [...t.messages, { id: nextMsgId(), role: 'user', text: `${elementName}: ${summary}` }],
+      messages: [...t.messages, { id: nextMsgId(), role: 'user', text: userLine }],
     }));
-
+    useUiStore.getState().setAgentOpen(true);
     const ld = getLd();
     if (!ld) {
       get()._failThread(id, new Error('Open the desktop app to edit.'));
@@ -281,13 +279,54 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         prompt,
         kind: 'ui',
         mode: 'chat',
-        title: `Edit ${elementName}`,
+        title,
         artifactPath: viewPath,
         artifactId: viewPath,
         ...(existing?.sessionId ? { resumeSessionId: existing.sessionId } : {}),
       })
       .then((r) => get()._patch(id, (t) => ({ ...t, currentJobId: r.jobId })))
       .catch((err) => get()._failThread(id, err));
+  },
+
+  editElement: ({ viewPath, elementName, elementType, changes }) => {
+    const summary = changes.map((c) => `${c.label} → ${c.value}`).join(', ');
+    const prompt =
+      `In the SpectaclesUIKit view at this exact file path: ${viewPath}\n` +
+      `Modify the element named "${elementName}"${elementType ? ` (a ${elementType})` : ''}: ` +
+      changes.map((c) => `set its ${c.label} to ${c.value}`).join('; ') +
+      `.\nEdit the view's TypeScript source to apply this, then recompile so Lens Studio re-renders it. ` +
+      `Keep every other element unchanged.`;
+    get()._runViewEdit(viewPath, `Edit ${elementName}`, `${elementName}: ${summary}`, prompt);
+  },
+
+  addElement: ({ viewPath, containerName, type }) => {
+    const prompt =
+      `In the SpectaclesUIKit view at this exact file path: ${viewPath}\n` +
+      `Add a new ${type} element as a child of the container named "${containerName}". ` +
+      `Use the project's SpectaclesUIKit idiom (createComponent(${type}.getTypeName()) or the ` +
+      `appropriate factory) and wire it into that container's layout with sensible defaults. ` +
+      `Edit the view's TypeScript source, then recompile so Lens Studio re-renders it. ` +
+      `Keep every existing element unchanged.`;
+    get()._runViewEdit(viewPath, `Add ${type}`, `Add ${type} → ${containerName}`, prompt);
+  },
+
+  moveElement: ({ viewPath, elementName, targetName, position }) => {
+    const prompt =
+      `In the SpectaclesUIKit view at this exact file path: ${viewPath}\n` +
+      `Reorder the layout so the element named "${elementName}" comes ${position} the element named ` +
+      `"${targetName}" within their shared parent. Adjust the source so they build in that order. ` +
+      `Edit the view's TypeScript source, then recompile so Lens Studio re-renders it. ` +
+      `Change nothing else.`;
+    get()._runViewEdit(viewPath, `Move ${elementName}`, `Move ${elementName} ${position} ${targetName}`, prompt);
+  },
+
+  deleteElement: ({ viewPath, elementName }) => {
+    const prompt =
+      `In the SpectaclesUIKit view at this exact file path: ${viewPath}\n` +
+      `Remove the element named "${elementName}" and the code that builds it (and its children). ` +
+      `Edit the view's TypeScript source, then recompile so Lens Studio re-renders it. ` +
+      `Keep every other element unchanged.`;
+    get()._runViewEdit(viewPath, `Delete ${elementName}`, `Delete ${elementName}`, prompt);
   },
 
   cancel: (id) => {
