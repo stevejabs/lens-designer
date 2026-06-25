@@ -142,6 +142,27 @@ export function useElementTree(): {
   return { tree, ok, reason, loading, refresh };
 }
 
+/** Live property values of a selected element (for inspector pre-fill). */
+export function useElementProps(uniqueId: string | null): Record<string, unknown> {
+  const [props, setProps] = useState<Record<string, unknown>>({});
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+  useEffect(() => {
+    const ld = getLd();
+    if (!ld || !uniqueId) {
+      setProps({});
+      return;
+    }
+    let alive = true;
+    void ld.ui.props(uniqueId).then((p) => {
+      if (alive) setProps(p ?? {});
+    });
+    return () => {
+      alive = false;
+    };
+  }, [uniqueId, artifactNonce]);
+  return props;
+}
+
 /** Capture the live Lens Studio preview as an image data URL. */
 export function usePreview(): { image: string | null; capturing: boolean; capture: () => void } {
   const [image, setImage] = useState<string | null>(null);

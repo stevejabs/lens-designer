@@ -94,16 +94,21 @@ export async function readElementTree(client: McpClient): Promise<ElementTree> {
   return { ok: true, host: host.name, tree: root };
 }
 
-/** Read a live property value off a runtime component (best-effort). */
-export async function readElementProperty(
+/** Read the live property values of an element (merged across its readable
+ *  runtime components — Text, Image, RenderMeshVisual, …). Used to pre-fill the
+ *  inspector with the element's current state. UIKit script components
+ *  (Switch/Slider/RoundedRectangle) aren't registered readers, so their props
+ *  won't appear — those controls fall back to catalog defaults. */
+export async function readElementProperties(
   client: McpClient,
   uniqueId: string,
-  componentType: string,
-  propertyName: string,
-): Promise<unknown> {
-  const data = await query<{ sceneObject?: { component?: { value?: unknown } } }>(
-    client,
-    `{ sceneObject(uniqueId: "${uniqueId}") { component(type: "${componentType}") { property(name: "${propertyName}") { value } } } }`,
-  );
-  return data?.sceneObject?.component?.value ?? null;
+): Promise<Record<string, unknown>> {
+  const data = await query<{
+    sceneObject?: { components?: { type: string; properties?: Record<string, unknown> }[] };
+  }>(client, `{ sceneObject(uniqueId: "${uniqueId}") { components { type properties } } }`);
+  const merged: Record<string, unknown> = {};
+  for (const c of data?.sceneObject?.components ?? []) {
+    for (const [k, v] of Object.entries(c.properties ?? {})) merged[k] = v;
+  }
+  return merged;
 }

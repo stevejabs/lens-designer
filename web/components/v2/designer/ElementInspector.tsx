@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Layers, Sparkles } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { useAgentStore } from '@/lib/v2/agent-store';
+import { useElementProps } from '@/lib/v2/hooks';
 import { specForType, type PropSpec, type ComponentSpec } from '@/lib/v2/uikit/catalog';
 import { CornerControl } from './CornerControl';
 import { Button } from '../ui/Primitives';
@@ -11,6 +12,36 @@ import { cn } from '@/lib/v2/cn';
 
 type Change = { label: string; value: string };
 type Pending = Record<string, Change>;
+
+function rgbaToHex(v: unknown): string | undefined {
+  const o = v as { r?: number; g?: number; b?: number } | null;
+  if (!o || typeof o.r !== 'number') return undefined;
+  const h = (n: number): string => Math.max(0, Math.min(255, Math.round((n ?? 0) * 255))).toString(16).padStart(2, '0');
+  return `#${h(o.r)}${h(o.g ?? 0)}${h(o.b ?? 0)}`;
+}
+
+/** Derive an inspector control's initial value from the element's live runtime
+ *  properties (Text/Image readers), falling back to the catalog default. */
+function initialValue(spec: PropSpec, props: Record<string, unknown>): string | undefined {
+  const last = spec.path?.split('.').pop();
+  const keys = [spec.key, last, 'color', 'baseColor'].filter(Boolean) as string[];
+  let raw: unknown;
+  for (const k of keys) {
+    if (props[k] !== undefined) {
+      raw = props[k];
+      break;
+    }
+  }
+  if (raw === undefined) return undefined;
+  if (spec.type === 'color') return rgbaToHex(raw);
+  if (spec.type === 'boolean') return raw ? 'true' : 'false';
+  if (spec.type === 'enum') {
+    const idx = Number(raw);
+    if (Number.isInteger(idx) && spec.options?.[idx]) return spec.options[idx];
+    return String(raw);
+  }
+  return String(raw);
+}
 
 function PropRow({
   spec,
@@ -90,14 +121,17 @@ function ElementInspector({
   name,
   type,
   viewPath,
+  elementId,
 }: {
   spec: ComponentSpec;
   name: string;
   type: string | null;
   viewPath: string | null;
+  elementId: string;
 }) {
   const editElement = useAgentStore((s) => s.editElement);
   const setAgentOpen = useUiStore((s) => s.setAgentOpen);
+  const liveProps = useElementProps(elementId);
   const [pending, setPending] = useState<Pending>({});
 
   const setProp = (key: string, label: string, value: string): void =>
@@ -137,7 +171,12 @@ function ElementInspector({
           <div key={cat} className="px-4 py-2 border-b border-subtle">
             <div className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-1">{cat}</div>
             {specs.map((s) => (
-              <PropRow key={s.key} spec={s} value={pending[s.key]?.value} onChange={(v) => setProp(s.key, s.label, v)} />
+              <PropRow
+                key={s.key}
+                spec={s}
+                value={pending[s.key]?.value ?? initialValue(s, liveProps)}
+                onChange={(v) => setProp(s.key, s.label, v)}
+              />
             ))}
           </div>
         );
@@ -177,5 +216,14 @@ export function ElementInspectorPanel() {
       </div>
     );
   }
-  return <ElementInspector key={selected.id} spec={spec} name={selected.name} type={selected.type} viewPath={viewPath} />;
+  return (
+    <ElementInspector
+      key={selected.id}
+      spec={spec}
+      name={selected.name}
+      type={selected.type}
+      viewPath={viewPath}
+      elementId={selected.id}
+    />
+  );
 }

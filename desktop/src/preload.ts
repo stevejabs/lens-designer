@@ -279,6 +279,7 @@ export interface LDApi {
   };
   ui: {
     tree(): Promise<LDElementTree>;
+    props(uniqueId: string): Promise<Record<string, unknown>>;
   };
   /** Bay bootstrap result (created/attached/posture) pushed after connect. */
   onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
@@ -378,6 +379,7 @@ const ld: LDApi = {
   },
   ui: {
     tree: () => ipcRenderer.invoke('ld:ui:tree') as Promise<LDElementTree>,
+    props: (uniqueId) => ipcRenderer.invoke('ld:ui:props', uniqueId) as Promise<Record<string, unknown>>,
   },
   onBays: (handler) => {
     const listener = (_e: Electron.IpcRendererEvent, r: { ok: boolean; message?: string }): void => handler(r);

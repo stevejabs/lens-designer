@@ -38,7 +38,7 @@ import {
   type BayPosture,
 } from './services/bays.js';
 import { planSceneOrganization, organizeSceneIntoAppBay } from './services/scene-organize.js';
-import { readElementTree } from './services/ui-tree.js';
+import { readElementTree, readElementProperties } from './services/ui-tree.js';
 import { buildPlanPrompt, parseManifest } from './services/build-plan.js';
 import { snapshotAssets, detectCreated, reconcileRefine } from './services/asset-watch.js';
 import { snapshot as snapshotVersion, listVersions, restoreVersion, versionFilePath } from './services/versions.js';
@@ -225,6 +225,9 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
   );
   // Live UIKit element tree of the loaded view (read from the running preview).
   ipcMain.handle('ld:ui:tree', () => orchestrator.runDirect((c) => readElementTree(c)));
+  ipcMain.handle('ld:ui:props', (_e, uniqueId: string) =>
+    orchestrator.runDirect((c) => readElementProperties(c, uniqueId)),
+  );
 
   // ── Project onboarding: organize an existing scene into the app bay ──
   // Read-only plan (content vs. infrastructure) for the confirmation dialog.
