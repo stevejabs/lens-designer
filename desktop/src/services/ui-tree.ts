@@ -122,6 +122,24 @@ export async function captureLoadedView(
   }
 }
 
+/** Batch-read live properties for many elements (one concurrent fan-out), so
+ *  the flat editor can render every node faithfully in one pass. */
+export async function readElementPropertiesBatch(
+  client: McpClient,
+  uniqueIds: string[],
+): Promise<Record<string, Record<string, unknown>>> {
+  const entries = await Promise.all(
+    uniqueIds.slice(0, 200).map(async (id): Promise<[string, Record<string, unknown>]> => {
+      try {
+        return [id, await readElementProperties(client, id)];
+      } catch {
+        return [id, {}];
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 /** Read the live property values of an element (merged across its readable
  *  runtime components — Text, Image, RenderMeshVisual, …). Used to pre-fill the
  *  inspector with the element's current state. UIKit script components

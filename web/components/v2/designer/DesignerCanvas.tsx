@@ -2,42 +2,11 @@
 
 import { MousePointer2, Hand, Frame, Eye, RefreshCw, Loader2, Monitor } from 'lucide-react';
 import { cn } from '@/lib/v2/cn';
-import { usePreview, useViewRender } from '@/lib/v2/hooks';
+import { usePreview } from '@/lib/v2/hooks';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { getLd } from '@/lib/v2/native';
 import { Pill } from '../ui/Primitives';
-
-function CanvasToolbar({ onResync, capturing }: { onResync: () => void; capturing: boolean }) {
-  const tools = [
-    { icon: MousePointer2, label: 'Select', active: true },
-    { icon: Hand, label: 'Pan' },
-    { icon: Frame, label: 'Frame' },
-  ];
-  return (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-0.5 p-1 rounded-lg glass border border-default shadow-md">
-      {tools.map((t) => (
-        <button
-          key={t.label}
-          title={t.label}
-          className={cn(
-            'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
-            t.active ? 'bg-bg-4 text-text-primary' : 'text-text-tertiary hover:text-text-primary hover:bg-bg-3',
-          )}
-        >
-          <t.icon className="w-4 h-4" />
-        </button>
-      ))}
-      <div className="w-px h-5 mx-1 bg-border-subtle" />
-      <button
-        onClick={onResync}
-        title="Re-render"
-        className="flex items-center justify-center w-8 h-8 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-3 transition-colors"
-      >
-        {capturing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-      </button>
-    </div>
-  );
-}
+import { FlatEditor } from './FlatEditor';
 
 function Stage({
   image,
@@ -79,29 +48,22 @@ function Stage({
   );
 }
 
-/** The editor surface: the loaded view, isolated + auto-framed so it's always
- *  in view. The selected element + drag-and-drop live here. */
+/** The editor surface: a flat HTML reconstruction of the loaded view (flexbox
+ *  mirrors UIKit's FlexLayout) — select elements, edit them in the inspector. */
 function EditorPane() {
-  const { image, capturing, capture } = useViewRender();
   const selected = useUiStore((s) => s.selectedElement);
   return (
-    <div className="relative flex-1 min-w-0 canvas-dots overflow-hidden">
-      <CanvasToolbar onResync={capture} capturing={capturing} />
+    <div className="relative flex flex-1 min-w-0 flex-col">
       <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
         <Pill tone="accent">
           <MousePointer2 className="w-3 h-3" /> Editor
         </Pill>
         {selected && <Pill tone="violet">{selected.type ?? selected.name}</Pill>}
       </div>
-      <Stage
-        image={image}
-        capturing={capturing}
-        alt="Editor — loaded view"
-        hint="Select a view in the Layers panel to edit it here."
-      />
+      <FlatEditor />
       <div className="absolute bottom-0 inset-x-0 h-7 px-3 flex items-center justify-between glass border-t border-subtle">
-        <span className="font-num text-2xs text-text-tertiary">53 × 77 cm usable</span>
-        <span className="text-2xs text-text-tertiary">isolated view · always in frame</span>
+        <span className="font-num text-2xs text-text-tertiary">30 × 34 cm panel</span>
+        <span className="text-2xs text-text-tertiary">flat editor · click to select</span>
       </div>
     </div>
   );

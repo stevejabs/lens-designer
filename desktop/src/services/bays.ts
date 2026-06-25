@@ -161,6 +161,10 @@ export async function loadViewIntoEditBay(
     '}' +
     'host.enabled = true;' +
     'editBay.enabled = true;' +
+    // Place the view on the camera forward axis, far enough back that the full
+    // panel sits inside the preview camera frustum (camera at origin, FOV ~63°;
+    // a ~34cm panel needs ~1m to frame comfortably with margin).
+    'host.localTransform.position = new vec3(0, 0, -100);' +
     'return { status: "loaded", host: HOST };';
   return eec(client, code);
 }

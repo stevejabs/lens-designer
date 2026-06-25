@@ -280,6 +280,7 @@ export interface LDApi {
   ui: {
     tree(): Promise<LDElementTree>;
     props(uniqueId: string): Promise<Record<string, unknown>>;
+    propsBatch(ids: string[]): Promise<Record<string, Record<string, unknown>>>;
     capture(): Promise<string | null>;
   };
   /** Bay bootstrap result (created/attached/posture) pushed after connect. */
@@ -381,6 +382,8 @@ const ld: LDApi = {
   ui: {
     tree: () => ipcRenderer.invoke('ld:ui:tree') as Promise<LDElementTree>,
     props: (uniqueId) => ipcRenderer.invoke('ld:ui:props', uniqueId) as Promise<Record<string, unknown>>,
+    propsBatch: (ids) =>
+      ipcRenderer.invoke('ld:ui:propsBatch', ids) as Promise<Record<string, Record<string, unknown>>>,
     capture: () => ipcRenderer.invoke('ld:ui:capture') as Promise<string | null>,
   },
   onBays: (handler) => {
