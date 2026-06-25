@@ -61,6 +61,20 @@ export interface LDElementTree {
   tree?: LDElementNode;
 }
 
+export interface LDElementLayout {
+  id: string;
+  name: string;
+  componentTypes: string[];
+  parentName: string | null;
+  x: number;
+  y: number;
+  z: number;
+}
+export interface LDViewLayout {
+  fovDeg: number;
+  elements: LDElementLayout[];
+}
+
 export type LDBuildStepKind = 'mesh' | 'music' | 'sfx' | 'ui';
 export interface LDBuildStep {
   kind: LDBuildStepKind;
@@ -164,6 +178,7 @@ export interface LDApi {
     props(uniqueId: string): Promise<Record<string, unknown>>;
     propsBatch(ids: string[]): Promise<Record<string, Record<string, unknown>>>;
     capture(): Promise<string | null>;
+    layout(): Promise<LDViewLayout>;
   };
   onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
   asset: {

@@ -122,6 +122,66 @@ export async function captureLoadedView(
   }
 }
 
+export interface ElementLayout {
+  id: string;
+  name: string;
+  componentTypes: string[];
+  parentName: string | null;
+  /** World position (cm) — camera is at origin looking -Z. */
+  x: number;
+  y: number;
+  z: number;
+}
+export interface ViewLayout {
+  /** Camera vertical-ish FOV in degrees (for screen projection). */
+  fovDeg: number;
+  elements: ElementLayout[];
+}
+
+/** Read each element's world position + the camera FOV, so the canvas can
+ *  project interactive overlays exactly onto the rendered view. */
+export async function readViewLayout(client: McpClient): Promise<ViewLayout> {
+  const tree = await readElementTree(client);
+  const flat: { id: string; name: string; componentTypes: string[]; parentName: string | null }[] = [];
+  const walk = (n: ElementNode | undefined, parentName: string | null): void => {
+    if (!n) return;
+    if (n.name !== 'Collider') flat.push({ id: n.id, name: n.name, componentTypes: n.componentTypes, parentName });
+    n.children.forEach((c) => walk(c, n.name));
+  };
+  walk(tree.tree, null);
+
+  // Camera FOV.
+  let fovDeg = 63.5;
+  const cam = await query<{ sceneObjects?: { matches?: { summary: { uniqueId: string } }[] } }>(
+    client,
+    '{ sceneObjects(filter: {hasComponents: ["Camera"]}) { matches { summary } } }',
+  );
+  const camId = cam?.sceneObjects?.matches?.[0]?.summary?.uniqueId;
+  if (camId) {
+    const cd = await query<{ sceneObject?: { components?: { type: string; properties?: Record<string, unknown> }[] } }>(
+      client,
+      `{ sceneObject(uniqueId: "${camId}") { components { type properties } } }`,
+    );
+    for (const c of cd?.sceneObject?.components ?? []) {
+      const f = c.properties?.['fov'];
+      if (typeof f === 'number') fovDeg = f < 10 ? (f * 180) / Math.PI : f; // radians→deg if tiny
+    }
+  }
+
+  const elements = await Promise.all(
+    flat.map(async ({ id, name, componentTypes, parentName }): Promise<ElementLayout | null> => {
+      const r = await query<{ sceneObject?: { transform?: { worldPosition?: { x: number; y: number; z: number } } } }>(
+        client,
+        `{ sceneObject(uniqueId: "${id}") { transform { worldPosition localPosition worldScale } } }`,
+      );
+      const wp = r?.sceneObject?.transform?.worldPosition;
+      if (!wp) return null;
+      return { id, name, componentTypes, parentName, x: wp.x, y: wp.y, z: wp.z };
+    }),
+  );
+  return { fovDeg, elements: elements.filter((e): e is ElementLayout => e !== null) };
+}
+
 /** Batch-read live properties for many elements (one concurrent fan-out), so
  *  the flat editor can render every node faithfully in one pass. */
 export async function readElementPropertiesBatch(

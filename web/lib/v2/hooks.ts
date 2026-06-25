@@ -275,6 +275,30 @@ export function useScriptMeshPreview(path: string | null): {
   return { image, loading, render };
 }
 
+/** Per-element world positions + camera FOV, for projecting interactive
+ *  overlays exactly onto the rendered view. */
+export function useViewLayout(): import('./native').LDViewLayout | null {
+  const [layout, setLayout] = useState<import('./native').LDViewLayout | null>(null);
+  const conn = useConnection();
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+  const activeArtifact = useUiStore((s) => s.activeArtifact);
+  useEffect(() => {
+    const ld = getLd();
+    if (!ld || conn.kind !== 'connected') return;
+    let alive = true;
+    const t = setTimeout(() => {
+      void ld.ui.layout().then((l) => {
+        if (alive) setLayout(l);
+      });
+    }, 800);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [conn.kind, artifactNonce, activeArtifact?.path]);
+  return layout;
+}
+
 /** Isolated, auto-framed render of the loaded view — always in-frame (object
  *  mode), the editor canvas surface. Distinct from usePreview (full LS scene). */
 export function useViewRender(): { image: string | null; capturing: boolean; capture: () => void } {

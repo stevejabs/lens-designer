@@ -42,6 +42,7 @@ import {
   readElementTree,
   readElementProperties,
   readElementPropertiesBatch,
+  readViewLayout,
   captureLoadedView,
 } from './services/ui-tree.js';
 import { buildPlanPrompt, parseManifest } from './services/build-plan.js';
@@ -238,6 +239,8 @@ export function registerV2Ipc(deps: V2IpcDeps): { orchestrator: Orchestrator; di
   );
   // Isolated, auto-framed render of the loaded view (always in-frame).
   ipcMain.handle('ld:ui:capture', () => orchestrator.runDirect((c) => captureLoadedView(c)));
+  // Per-element world positions + camera FOV for projecting on-canvas overlays.
+  ipcMain.handle('ld:ui:layout', () => orchestrator.runDirect((c) => readViewLayout(c)));
 
   // ── Project onboarding: organize an existing scene into the app bay ──
   // Read-only plan (content vs. infrastructure) for the confirmation dialog.

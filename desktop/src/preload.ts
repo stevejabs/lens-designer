@@ -177,6 +177,20 @@ export interface LDElementTree {
   tree?: LDElementNode;
 }
 
+export interface LDElementLayout {
+  id: string;
+  name: string;
+  componentTypes: string[];
+  parentName: string | null;
+  x: number;
+  y: number;
+  z: number;
+}
+export interface LDViewLayout {
+  fovDeg: number;
+  elements: LDElementLayout[];
+}
+
 export interface LDScannedAsset {
   id: string;
   name: string;
@@ -282,6 +296,7 @@ export interface LDApi {
     props(uniqueId: string): Promise<Record<string, unknown>>;
     propsBatch(ids: string[]): Promise<Record<string, Record<string, unknown>>>;
     capture(): Promise<string | null>;
+    layout(): Promise<LDViewLayout>;
   };
   /** Bay bootstrap result (created/attached/posture) pushed after connect. */
   onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
@@ -385,6 +400,7 @@ const ld: LDApi = {
     propsBatch: (ids) =>
       ipcRenderer.invoke('ld:ui:propsBatch', ids) as Promise<Record<string, Record<string, unknown>>>,
     capture: () => ipcRenderer.invoke('ld:ui:capture') as Promise<string | null>,
+    layout: () => ipcRenderer.invoke('ld:ui:layout') as Promise<LDViewLayout>,
   },
   onBays: (handler) => {
     const listener = (_e: Electron.IpcRendererEvent, r: { ok: boolean; message?: string }): void => handler(r);
