@@ -163,6 +163,20 @@ export interface LDVersionEntry {
   sizeBytes: number;
 }
 
+export interface LDElementNode {
+  id: string;
+  name: string;
+  componentTypes: string[];
+  enabled: boolean;
+  children: LDElementNode[];
+}
+export interface LDElementTree {
+  ok: boolean;
+  reason?: string;
+  host?: string;
+  tree?: LDElementNode;
+}
+
 export interface LDScannedAsset {
   id: string;
   name: string;
@@ -263,6 +277,9 @@ export interface LDApi {
     load(viewPath: string): Promise<{ status: string; host?: string }>;
     clear(): Promise<void>;
   };
+  ui: {
+    tree(): Promise<LDElementTree>;
+  };
   /** Bay bootstrap result (created/attached/posture) pushed after connect. */
   onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
   asset: {
@@ -358,6 +375,9 @@ const ld: LDApi = {
   view: {
     load: (viewPath) => ipcRenderer.invoke('ld:view:load', viewPath) as Promise<{ status: string; host?: string }>,
     clear: () => ipcRenderer.invoke('ld:view:clear') as Promise<void>,
+  },
+  ui: {
+    tree: () => ipcRenderer.invoke('ld:ui:tree') as Promise<LDElementTree>,
   },
   onBays: (handler) => {
     const listener = (_e: Electron.IpcRendererEvent, r: { ok: boolean; message?: string }): void => handler(r);

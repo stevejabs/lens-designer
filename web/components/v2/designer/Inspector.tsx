@@ -8,6 +8,7 @@ import { getLd, type LDViewField, type LDFieldKind } from '@/lib/v2/native';
 import { cn } from '@/lib/v2/cn';
 import { Group, Row, NumField, Swatch, Slider, Toggle, StateTabs } from './InspectorFields';
 import { Pill } from '../ui/Primitives';
+import { ElementInspectorPanel } from './ElementInspector';
 
 function vec4ToHex(v: number[]): string {
   const c = (n: number): string =>
@@ -190,6 +191,7 @@ export function Inspector() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        <ElementInspectorPanel />
         {live ? (
           groups.map((g) => (
             <Group key={g.title} title={g.title}>

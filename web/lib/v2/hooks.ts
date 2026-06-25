@@ -101,6 +101,47 @@ export function useViews(): { views: DesignView[]; refresh: () => void } {
   return { views, refresh };
 }
 
+/** The loaded view's live UIKit element tree (from the running preview). */
+export function useElementTree(): {
+  tree: import('./native').LDElementNode | null;
+  ok: boolean;
+  reason: string | null;
+  loading: boolean;
+  refresh: () => void;
+} {
+  const [tree, setTree] = useState<import('./native').LDElementNode | null>(null);
+  const [ok, setOk] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const activeArtifact = useUiStore((s) => s.activeArtifact);
+  const artifactNonce = useUiStore((s) => s.artifactNonce);
+  const conn = useConnection();
+
+  const refresh = useCallback(() => {
+    const ld = getLd();
+    if (!ld) return;
+    setLoading(true);
+    void ld.ui
+      .tree()
+      .then((r) => {
+        setTree(r.tree ?? null);
+        setOk(r.ok);
+        setReason(r.reason ?? null);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Re-read when a view is (re)selected, after edits, and on connect. The
+  // runtime tree appears a beat after the view loads, so refresh is debounced.
+  useEffect(() => {
+    if (conn.kind !== 'connected') return;
+    const t = setTimeout(refresh, 600);
+    return () => clearTimeout(t);
+  }, [refresh, conn.kind, activeArtifact?.path, artifactNonce]);
+
+  return { tree, ok, reason, loading, refresh };
+}
+
 /** Capture the live Lens Studio preview as an image data URL. */
 export function usePreview(): { image: string | null; capturing: boolean; capture: () => void } {
   const [image, setImage] = useState<string | null>(null);

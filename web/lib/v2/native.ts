@@ -47,6 +47,20 @@ export interface LDVersionEntry {
   sizeBytes: number;
 }
 
+export interface LDElementNode {
+  id: string;
+  name: string;
+  componentTypes: string[];
+  enabled: boolean;
+  children: LDElementNode[];
+}
+export interface LDElementTree {
+  ok: boolean;
+  reason?: string;
+  host?: string;
+  tree?: LDElementNode;
+}
+
 export type LDBuildStepKind = 'mesh' | 'music' | 'sfx' | 'ui';
 export interface LDBuildStep {
   kind: LDBuildStepKind;
@@ -144,6 +158,9 @@ export interface LDApi {
   view: {
     load(viewPath: string): Promise<{ status: string; host?: string }>;
     clear(): Promise<void>;
+  };
+  ui: {
+    tree(): Promise<LDElementTree>;
   };
   onBays(handler: (r: { ok: boolean; message?: string }) => void): () => void;
   asset: {

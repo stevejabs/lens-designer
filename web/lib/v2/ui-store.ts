@@ -16,6 +16,8 @@ interface UiState {
   artifactNonce: number;
   /** The artifact (view/asset) the workspace + preview are scoped to. */
   activeArtifact: { path: string; id: string; name: string; kind: 'view' | 'asset' } | null;
+  /** The selected UIKit element in the Designer's live element tree. */
+  selectedElement: { id: string; name: string; type: string | null } | null;
 
   setMode: (mode: WorkspaceMode) => void;
   setPosture: (posture: Posture) => void;
@@ -29,6 +31,7 @@ interface UiState {
   /** Signal that project artifacts likely changed (a job finished). */
   bumpArtifacts: () => void;
   setActiveArtifact: (a: UiState['activeArtifact']) => void;
+  setSelectedElement: (e: UiState['selectedElement']) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -41,6 +44,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedViewId: 'v1',
   artifactNonce: 0,
   activeArtifact: null,
+  selectedElement: null,
 
   setMode: (mode) => set({ mode }),
   setPosture: (posture) => set({ posture }),
@@ -52,5 +56,6 @@ export const useUiStore = create<UiState>((set) => ({
   selectAsset: (selectedAssetId) => set({ selectedAssetId }),
   selectView: (selectedViewId) => set({ selectedViewId }),
   bumpArtifacts: () => set((s) => ({ artifactNonce: s.artifactNonce + 1 })),
-  setActiveArtifact: (activeArtifact) => set({ activeArtifact }),
+  setActiveArtifact: (activeArtifact) => set({ activeArtifact, selectedElement: null }),
+  setSelectedElement: (selectedElement) => set({ selectedElement }),
 }));

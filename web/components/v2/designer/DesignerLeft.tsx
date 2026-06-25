@@ -18,6 +18,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useUiStore } from '@/lib/v2/ui-store';
 import { useAgentStore } from '@/lib/v2/agent-store';
 import { getLd } from '@/lib/v2/native';
+import { ElementTree } from './ElementTree';
 import { cn } from '@/lib/v2/cn';
 import { useViews } from '@/lib/v2/hooks';
 import { SectionLabel } from '../ui/Primitives';
@@ -103,11 +104,16 @@ export function DesignerLeft() {
         )}
       </div>
 
+      {/* Live element tree of the loaded view */}
+      <div className="border-t border-subtle min-h-0 flex-1 flex flex-col">
+        <ElementTree />
+      </div>
+
       {/* Palette */}
-      <div className="px-4 pt-3 pb-2">
+      <div className="px-4 pt-3 pb-2 border-t border-subtle">
         <SectionLabel>Components</SectionLabel>
       </div>
-      <div className="flex-1 overflow-y-auto px-2 pb-3">
+      <div className="overflow-y-auto px-2 pb-3 max-h-44">
         <div className="grid grid-cols-2 gap-1.5">
           {PALETTE.map((p) => (
             <button
