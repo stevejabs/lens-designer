@@ -11,13 +11,20 @@ import { cn } from '@/lib/v2/cn';
  *  Unlinked (true per-corner) requires the forked CollapsedSquircle shader (4
  *  uniforms + per-quadrant SDF) — see uikit/corners. The four values are
  *  captured here so the fork applies them once the shader lands. */
-export function CornerControl() {
+export function CornerControl({ onChange }: { onChange?: (label: string, value: string) => void }) {
   const [linked, setLinked] = useState(true);
   const [all, setAll] = useState('1');
   const [corners, setCorners] = useState({ tl: '1', tr: '1', br: '1', bl: '1' });
 
-  const setCorner = (k: keyof typeof corners, v: string): void =>
-    setCorners((c) => ({ ...c, [k]: v }));
+  const setAllRadius = (v: string): void => {
+    setAll(v);
+    onChange?.('corner radius', v);
+  };
+  const setCorner = (k: keyof typeof corners, v: string): void => {
+    const next = { ...corners, [k]: v };
+    setCorners(next);
+    onChange?.('per-corner radius', `TL ${next.tl}, TR ${next.tr}, BR ${next.br}, BL ${next.bl} (individual rounded corners)`);
+  };
 
   return (
     <div>
@@ -43,7 +50,7 @@ export function CornerControl() {
           <span className="text-xs text-text-secondary">Radius</span>
           <input
             value={all}
-            onChange={(e) => setAll(e.target.value)}
+            onChange={(e) => setAllRadius(e.target.value)}
             className="w-28 h-6 px-2 rounded-md bg-bg-2 border border-default text-2xs text-text-primary text-right font-num outline-none focus:border-strong"
           />
         </div>
