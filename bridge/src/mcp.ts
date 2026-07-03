@@ -139,10 +139,19 @@ interface ClaudeConfigShape {
   }>;
 }
 
-/** Port range the marker scan covers. */
-const SCAN_RANGE = { start: 50000, end: 50100 };
+/** Port range the marker scan covers. LS assigns its MCP port somewhere in
+ *  this window (Settings → API); we never bake a single port in. */
+const SCAN_RANGE = { start: 50000, end: 51000 };
 /** Per-port timeout during scan. Most ports return ECONNREFUSED in <5ms; this guards against a hung non-MCP HTTP server. */
 const SCAN_TIMEOUT_MS = 800;
+/**
+ * Max in-flight probes during a scan. The range is ~1000 ports; firing all of
+ * them at once would open ~1000 sockets simultaneously (fd pressure) and, worse,
+ * stack every hung-but-listening port's full SCAN_TIMEOUT_MS into one burst.
+ * Bounded batches keep the socket count flat; refused ports still resolve in
+ * <5ms so a batch's wall time is dominated by its slowest live port.
+ */
+const SCAN_CONCURRENCY = 128;
 
 /** Read the shared bearer from ~/.claude.json (LS keychain → Claude Code config). */
 export async function resolveBearer(): Promise<string> {
@@ -250,7 +259,14 @@ export interface InstanceSummary {
 export async function scanInstances(bearer: string): Promise<InstanceSummary[]> {
   const ports: number[] = [];
   for (let p = SCAN_RANGE.start; p <= SCAN_RANGE.end; p++) ports.push(p);
-  const results = await Promise.all(ports.map((p) => probePort(p, bearer)));
+  // Probe in bounded batches (SCAN_CONCURRENCY) rather than all at once — see
+  // the constant's note for why.
+  const results: Array<{ port: number; hasMarker: boolean } | null> = [];
+  for (let i = 0; i < ports.length; i += SCAN_CONCURRENCY) {
+    const batch = ports.slice(i, i + SCAN_CONCURRENCY);
+    const batchResults = await Promise.all(batch.map((p) => probePort(p, bearer)));
+    results.push(...batchResults);
+  }
   const found = results
     .filter((r): r is { port: number; hasMarker: boolean } => r !== null)
     .sort((a, b) => a.port - b.port);

@@ -293,8 +293,18 @@ export type PreviewReadyMsg = z.infer<typeof PreviewReadyMsgSchema>;
 export const TargetSummarySchema = z.object({
   port: z.number().int().positive(),
   hasMarker: z.boolean(),
-  /** Best-effort project label; null when LS doesn't surface one. */
+  /** Project name, resolved config-first: the Lens Designer manifest's
+   *  `project.name` when the project is configured, else the project-dir
+   *  basename. Null when the bridge can't map the port to a project. */
   projectName: z.string().nullable().optional(),
+  /** Absolute path to the project's `Assets/` dir (lsof on the LS PID). Lets
+   *  the picker attach a configured project in one click — no re-Browse — and
+   *  match the instance against the recent-projects list. Null when unresolved. */
+  assetsDir: z.string().nullable().optional(),
+  /** True when the project carries a Lens Designer manifest
+   *  (`Assets/LensDesigner/views.json`) — i.e. we've already set it up. The
+   *  picker elevates these. */
+  configured: z.boolean().optional(),
 });
 export type TargetSummary = z.infer<typeof TargetSummarySchema>;
 
@@ -498,6 +508,32 @@ export const FontsAddedMsgSchema = z.object({
 export type FontsAddedMsg = z.infer<typeof FontsAddedMsgSchema>;
 
 /**
+ * Reply to `fonts.match-project`. Each match recovers a project-resident font
+ * file's identity by matching its content hash (the `font_<hash>.ttf` filename
+ * is `sha256(bytes)[:16]`) against a host system font. Lets a prior project's
+ * fonts repopulate the picker on a fresh browser / another machine / cleared
+ * storage — where the persisted `customFonts` bag doesn't carry them. Only
+ * files whose bytes match an installed system font appear here; unmatched
+ * project fonts stay on disk but can't have their display name recovered.
+ */
+export const FontsProjectMatchesMsgSchema = z.object({
+  type: z.literal('fonts.project-matches'),
+  matches: z.array(
+    z.object({
+      /** Project font basename (`font_<hash>.ttf`). */
+      file: z.string().min(1),
+      /** Sandbox-relative path for `addCustomFont` / FontFace loading. */
+      path: z.string().min(1),
+      /** CSS family token (`ldfont-<hash>`) — matches the add/upload flows. */
+      family: z.string().min(1),
+      /** Recovered display label (the matched system font's family). */
+      name: z.string().min(1),
+    }),
+  ),
+});
+export type FontsProjectMatchesMsg = z.infer<typeof FontsProjectMatchesMsgSchema>;
+
+/**
  * One-off full-window snapshot of the current LS window, sent in reply
  * to `preview.capture-full`. Dimensions are the LS window's bounds in
  * window pixels — the renderer uses them to translate a drag-rect (in
@@ -547,6 +583,7 @@ export const ServerToClientMsgSchema = z.discriminatedUnion('type', [
   FontsSystemListMsgSchema,
   FontsProjectListMsgSchema,
   FontsAddedMsgSchema,
+  FontsProjectMatchesMsgSchema,
   PreviewFullSnapshotMsgSchema,
   // attach-mode additions:
   TargetListResultMsgSchema,
@@ -634,6 +671,18 @@ export const FontsAddFromSystemMsgSchema = z.object({
   family: z.string().min(1),
 });
 export type FontsAddFromSystemMsg = z.infer<typeof FontsAddFromSystemMsgSchema>;
+
+/**
+ * Recover project-resident fonts' identity by matching their content hash to a
+ * host system font. `files` are project font basenames (`font_<hash>.ttf`) the
+ * client can't name — typically on attach, when a prior project's fonts are on
+ * disk but absent from the local `customFonts` store. Reply: `fonts.project-matches`.
+ */
+export const FontsMatchProjectMsgSchema = z.object({
+  type: z.literal('fonts.match-project'),
+  files: z.array(z.string().min(1)),
+});
+export type FontsMatchProjectMsg = z.infer<typeof FontsMatchProjectMsgSchema>;
 
 /**
  * Sweep orphaned per-node materials, ingested images, and ingested
@@ -774,6 +823,7 @@ export const ClientToServerMsgSchema = z.discriminatedUnion('type', [
   FontsListSystemMsgSchema,
   FontsListProjectMsgSchema,
   FontsAddFromSystemMsgSchema,
+  FontsMatchProjectMsgSchema,
   PreviewConfigureRegionMsgSchema,
   PreviewCaptureFullMsgSchema,
   PreviewSetDistanceMsgSchema,

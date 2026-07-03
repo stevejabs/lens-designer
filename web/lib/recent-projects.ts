@@ -12,10 +12,11 @@ const CAP = 8;
 export interface RecentProject {
   /** Display name (the attach label / project header name). */
   name: string;
-  /** Absolute path to the project's Assets/ dir (the stable per-machine key). */
+  /** Absolute path to the project's Assets/ dir — the stable per-machine key
+   *  AND the sole identity. A project is NEVER pinned to an MCP port between
+   *  sessions: the port is whatever the live scan reports each launch, matched
+   *  back to this dir. (Older entries may carry a now-ignored `lastPort`.) */
   assetsDir: string;
-  /** Last port we attached on (a hint; LS reassigns per launch). */
-  lastPort: number;
   /** Epoch ms of the last attach — drives most-recent-first ordering. */
   attachedAt: number;
 }
@@ -50,13 +51,14 @@ export function getRecentProjects(): RecentProject[] {
   return read().sort((a, b) => b.attachedAt - a.attachedAt);
 }
 
-/** Record (or refresh) a successful attach. Dedups by assetsDir. */
+/** Record (or refresh) a successful attach. Dedups by assetsDir. No port is
+ *  stored — identity is the Assets dir, never the MCP port. */
 export function recordRecentProject(
-  entry: { name: string; assetsDir: string; lastPort: number },
+  entry: { name: string; assetsDir: string },
   now: number = Date.now(),
 ): void {
   const existing = read().filter((r) => r.assetsDir !== entry.assetsDir);
-  write([{ ...entry, attachedAt: now }, ...existing]);
+  write([{ name: entry.name, assetsDir: entry.assetsDir, attachedAt: now }, ...existing]);
 }
 
 /** Forget a project (e.g. the user removes it from the recents list). */

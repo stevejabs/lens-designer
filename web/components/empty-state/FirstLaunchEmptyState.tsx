@@ -14,6 +14,10 @@ export interface FirstLaunchEmptyStateProps {
   onAttach: () => void;
   onCreateSandbox: () => void;
   onLocateSandbox: () => void;
+  /** Live detected-instances panel (DetectedInstances), rendered between the
+   *  hero copy and the CTAs so the user sees reachable Lens Studio instances
+   *  on load. Omitted in contexts that don't scan (e.g. unit stubs). */
+  instancesSlot?: React.ReactNode;
 }
 
 export function FirstLaunchEmptyState(
@@ -44,6 +48,8 @@ export function FirstLaunchEmptyState(
           Point it at the project you&rsquo;re working on &mdash; we install
           the LensDesigner package into it.
         </p>
+
+        {props.instancesSlot}
 
         <div className="flex items-center justify-center gap-3.5">
           <button

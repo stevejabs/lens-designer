@@ -41,9 +41,11 @@ import { resetApplierCaches } from './applier.ts';
 import { ensureLensDesignerPackInstalled } from './pack.ts';
 import { pidListeningOnPort } from './capture.ts';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
-import { dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { REGISTRY_PATH, projectNameFromManifestJson } from './registry.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -71,6 +73,68 @@ async function resolveProjectAssetsDirForPort(port: number): Promise<string | nu
   } catch {
     return null;
   }
+}
+
+/**
+ * A discovered LS instance, enriched with project identity for the picker.
+ * Extends the raw `InstanceSummary` (port + sandbox-marker flag) with the
+ * project the instance has open, resolved config-first:
+ *   - `assetsDir`  — the project's `Assets/` dir (lsof on the LS PID).
+ *   - `configured` — true when that project carries a Lens Designer manifest
+ *                    (`Assets/LensDesigner/views.json`); i.e. we've set it up.
+ *   - `projectName`— from the manifest's `project.name` when configured;
+ *                    otherwise the project-dir basename (the lsof fallback).
+ * All identity fields are null when lsof can't resolve the project (e.g. lsof
+ * unavailable) — the instance still lists by bare port.
+ */
+export interface DiscoveredInstance extends InstanceSummary {
+  projectName: string | null;
+  assetsDir: string | null;
+  configured: boolean;
+}
+
+/**
+ * Resolve a discovered instance's project identity, config-first.
+ *
+ * The MCP port alone doesn't tell us which project LS has open (LS exposes no
+ * project-path API — TD-4), so we map port → PID → open `.esproj` via lsof to
+ * find the `Assets/` dir, then read the Lens Designer manifest from local disk
+ * (the bridge always reads project files from disk; MCP's text read truncates).
+ * The manifest is the authoritative name for projects we've set up; we only
+ * fall back to the directory basename when there's no manifest.
+ */
+async function resolveInstanceIdentity(
+  port: number,
+): Promise<{ projectName: string | null; assetsDir: string | null; configured: boolean }> {
+  const assetsDir = await resolveProjectAssetsDirForPort(port);
+  if (!assetsDir) return { projectName: null, assetsDir: null, configured: false };
+
+  // Manifest = the config we write into every project we set up. Its presence
+  // marks the project as "Lens Designer configured"; its `project.name` is the
+  // canonical display name.
+  const manifestName = await readManifestProjectName(join(assetsDir, REGISTRY_PATH));
+  if (manifestName !== null) {
+    return { projectName: manifestName, assetsDir, configured: true };
+  }
+  // Unconfigured project — fall back to the project-dir basename
+  // (`<projectDir>/Assets` → `<projectDir>`).
+  return { projectName: basename(dirname(assetsDir)), assetsDir, configured: false };
+}
+
+/**
+ * Read `project.name` from a Lens Designer manifest on disk. Returns null when
+ * the file is absent, unreadable, not JSON, or carries no usable name — any of
+ * which just means "treat as unconfigured", never throw into the scan.
+ */
+async function readManifestProjectName(manifestPath: string): Promise<string | null> {
+  let raw: string;
+  try {
+    raw = await readFile(manifestPath, 'utf8');
+  } catch {
+    return null; // no manifest → not set up by Lens Designer
+  }
+  // Torn / invalid manifest degrades to unconfigured (returns null), not fatal.
+  return projectNameFromManifestJson(raw);
 }
 
 /**
@@ -209,10 +273,11 @@ export class ConnectionManager {
   }
 
   /**
-   * List every responsive LS instance. Used by the attach-mode picker
-   * (Step 2). Does NOT change the active session.
+   * List every responsive LS instance, enriched with project identity for the
+   * picker (project name + Assets dir + whether Lens Designer has set it up).
+   * Used by the attach-mode picker (Step 2). Does NOT change the active session.
    */
-  async listInstances(): Promise<InstanceSummary[]> {
+  async listInstances(): Promise<DiscoveredInstance[]> {
     // Resolve ONLY the bearer — NOT resolveConfig(), which throws when no
     // sandbox-marked instance is running (it scans for the marker). The picker
     // must list unmarked instances too (attaching to a user project when no
@@ -220,7 +285,14 @@ export class ConnectionManager {
     // no marked sandbox → empty picker → can't attach the unmarked project.
     const bearer = await resolveBearer().catch(() => null);
     if (!bearer) return [];
-    return scanInstances(bearer);
+    const instances = await scanInstances(bearer);
+    // Enrich only the handful actually found (not all ~1000 scanned ports).
+    return Promise.all(
+      instances.map(async (i) => ({
+        ...i,
+        ...(await resolveInstanceIdentity(i.port)),
+      })),
+    );
   }
 
   /**

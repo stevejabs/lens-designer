@@ -17,9 +17,12 @@ import { Preview } from '@/components/Preview';
 import { useDesignStore } from '@/lib/design-model';
 import { Shapes, Undo2, Redo2, Pencil, Play } from 'lucide-react';
 import { FirstLaunchEmptyState } from '@/components/empty-state/FirstLaunchEmptyState';
+import { DetectedInstances } from '@/components/empty-state/DetectedInstances';
+import { AttachDialog } from '@/components/AttachDialog';
 import { CreateSandboxModal } from '@/components/sandbox/CreateSandboxModal';
 import { ErrorToasts } from '@/components/toast/ErrorToasts';
 import { isElectronHost, type PublicSettings } from '@/lib/native';
+import type { TargetSummary } from '@lens-designer/bridge/client';
 
 export default function Page() {
   const { state, send, onMessage } = useBridge();
@@ -68,6 +71,21 @@ export default function Page() {
   // background "wait for LS to come online + auto-attach" effect.
   const [awaitingSandbox, setAwaitingSandbox] = useState(false);
 
+  // Landing-page attach dialog — opened when the user picks a NOT-yet-configured
+  // instance from the inline detected-instances list (configured ones attach in
+  // one click). Lifted here so the dialog overlays the whole empty state.
+  const [landingDialog, setLandingDialog] = useState<{
+    open: boolean;
+    target: TargetSummary | null;
+    assetsDir: string;
+    label: string;
+  }>({ open: false, target: null, assetsDir: '', label: '' });
+
+  // Latest detected-instance count, read inside the auto-scan interval without
+  // re-arming the effect on every scan result.
+  const instanceCountRef = useRef(attach.picker.instances.length);
+  instanceCountRef.current = attach.picker.instances.length;
+
   useEffect(() => {
     if (!isElectronHost()) {
       setSettingsLoaded(true);
@@ -88,6 +106,24 @@ export default function Page() {
   // `pnpm web dev` workflow keeps working.
   const showEmptyState =
     settingsLoaded && isElectronHost() && attach.attach.kind !== 'attached';
+
+  // Pick an instance from the inline detected-instances list. A project Lens
+  // Designer already set up (configured + a scan-resolved Assets dir) attaches
+  // in one click — no port is involved beyond this session's live scan. Anything
+  // else opens the attach dialog to confirm/supply the Assets path before we
+  // install the LensDesigner pack into it.
+  const handleSelectInstance = (t: TargetSummary): void => {
+    if (t.configured && t.assetsDir) {
+      attach.attachTo(t.port, 'attached', t.assetsDir, t.projectName ?? undefined);
+      return;
+    }
+    setLandingDialog({
+      open: true,
+      target: t,
+      assetsDir: t.assetsDir ?? '',
+      label: t.projectName ?? '',
+    });
+  };
 
   const handleSandboxCreated = (result: {
     sandboxPath: string;
@@ -143,6 +179,23 @@ export default function Page() {
     };
   }, [awaitingSandbox, attach]);
 
+  // Auto-scan on the landing screen: the moment the renderer↔bridge WS is up
+  // and we're not attached, scan ports 50000–51000 and show the result inline —
+  // the user shouldn't have to open a picker to discover running LS instances.
+  // Re-poll every 4s ONLY while nothing has turned up yet (a freshly launched
+  // LS needs a few seconds before its MCP server answers); stop once an instance
+  // appears so the list doesn't churn. Browser dev mode (no Electron) is skipped
+  // — it has no landing screen.
+  useEffect(() => {
+    if (!connected || !isElectronHost()) return;
+    if (attach.attach.kind === 'attached') return;
+    attach.rescan();
+    const id = setInterval(() => {
+      if (instanceCountRef.current === 0) attach.rescan();
+    }, 4_000);
+    return () => clearInterval(id);
+  }, [connected, attach.attach.kind, attach.rescan]);
+
   if (showEmptyState) {
     return (
       <div className="h-screen w-screen overflow-hidden flex flex-col bg-bg-0 text-text-primary">
@@ -176,7 +229,31 @@ export default function Page() {
             // eslint-disable-next-line no-alert
             alert('"I already have one" lands with the Settings dialog (Step 11b).');
           }}
+          instancesSlot={
+            <DetectedInstances
+              instances={attach.picker.instances}
+              scanning={attach.picker.scanning}
+              onRescan={attach.rescan}
+              onSelect={handleSelectInstance}
+            />
+          }
         />
+        {landingDialog.open && landingDialog.target && (
+          <AttachDialog
+            target={landingDialog.target}
+            assetsDir={landingDialog.assetsDir}
+            name={landingDialog.label}
+            onAssetsDirChange={(v) => setLandingDialog((d) => ({ ...d, assetsDir: v }))}
+            onNameChange={(v) => setLandingDialog((d) => ({ ...d, label: v }))}
+            onCancel={() => setLandingDialog({ open: false, target: null, assetsDir: '', label: '' })}
+            onConfirm={() => {
+              const { target, assetsDir, label } = landingDialog;
+              if (!target) return;
+              attach.attachTo(target.port, 'attached', assetsDir, label);
+              setLandingDialog({ open: false, target: null, assetsDir: '', label: '' });
+            }}
+          />
+        )}
         {awaitingSandbox && (
           <div
             role="status"

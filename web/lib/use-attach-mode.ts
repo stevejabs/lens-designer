@@ -416,7 +416,6 @@ function handleAttached(
     recordRecentProject({
       name: msg.target.projectName ?? msg.target.assetsDir,
       assetsDir: msg.target.assetsDir,
-      lastPort: msg.target.port,
     });
   }
 }

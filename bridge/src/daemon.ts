@@ -35,7 +35,7 @@ import { captureWindowToFile, findLensStudioWindowForPort } from './capture.ts';
 import { previewDir, ensurePreviewDir } from './http-server.ts';
 import { LivePreview } from './live-preview.ts';
 import { runGc, type GcInputs } from './gc.ts';
-import { fontPathIsTrusted, listSystemFonts } from './fonts-system.ts';
+import { fontPathIsTrusted, listSystemFonts, matchProjectFontsToSystem } from './fonts-system.ts';
 import { sandboxLensDesignerDir, ingestFontBytes } from './mcp.ts';
 import { readFile, readdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -434,6 +434,25 @@ async function main(): Promise<void> {
           }
           break;
         }
+        case 'fonts.match-project': {
+          try {
+            // Recover display names for project-resident fonts by matching
+            // their content hash to an installed system font. Needs no LS
+            // connection (pure filesystem work), so it also resolves while
+            // detached. Unmatched files are simply omitted.
+            const matches = await matchProjectFontsToSystem(msg.files);
+            client.send({ type: 'fonts.project-matches', matches });
+            if (matches.length > 0) {
+              process.stdout.write(
+                `bridge: fonts.match-project recovered ${matches.length}/${msg.files.length} ` +
+                  `project font(s) from system fonts\n`,
+              );
+            }
+          } catch (err) {
+            sendError(client, `fonts.match-project failed: ${(err as Error).message}`);
+          }
+          break;
+        }
         case 'fonts.add-from-system': {
           try {
             const target = targetForApply();
@@ -466,18 +485,19 @@ async function main(): Promise<void> {
 
         case 'target.list': {
           try {
+            // Instances arrive enriched config-first: projectName/assetsDir
+            // resolved via lsof on the LS PID, `configured` set from the
+            // on-disk Lens Designer manifest. The picker elevates configured
+            // projects and one-click-attaches them via assetsDir.
             const instances = await connection.listInstances();
             client.send({
               type: 'target.list.result',
-              // projectName: LS exposes no API for the project's open
-              // .esproj path (TD-4). The picker chip reads port + marker
-              // flag, which is enough to disambiguate sandbox-vs-other on
-              // a typical single-user machine. lsof-based lookup against
-              // the LS PID's open files is a future enhancement.
               targets: instances.map((i) => ({
                 port: i.port,
                 hasMarker: i.hasMarker,
-                projectName: null,
+                projectName: i.projectName,
+                assetsDir: i.assetsDir,
+                configured: i.configured,
               })),
             });
           } catch (err) {

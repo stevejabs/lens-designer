@@ -114,6 +114,23 @@ export function emptyRegistry(): ViewRegistry {
   return { registryVersion: REGISTRY_VERSION, views: [] };
 }
 
+/**
+ * Extract a project's display name from a Lens Designer manifest's raw JSON
+ * text (the `project.name` field). Returns null when the text isn't JSON or
+ * carries no usable name — callers treat that as "unconfigured" and fall back
+ * to the directory basename; this never throws. Pure (no fs) so the instance
+ * scan's config-first identity resolution stays unit-testable.
+ */
+export function projectNameFromManifestJson(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw) as { project?: { name?: unknown } };
+    const name = parsed.project?.name;
+    return typeof name === 'string' && name.trim().length > 0 ? name : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Find a view by id. */
 export function findViewById(reg: ViewRegistry, id: string): ViewRecord | undefined {
   return reg.views.find((v) => v.id === id);

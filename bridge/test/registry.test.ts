@@ -21,6 +21,7 @@ import {
   deleteView,
   setProjectMeta,
   setSceneLink,
+  projectNameFromManifestJson,
   type ViewRegistry,
   type ViewRecord,
 } from '../src/registry.ts';
@@ -313,5 +314,30 @@ describe('registry v2 — project manifest + scene links', () => {
     expect(() => ViewRegistrySchema.parse(linked)).not.toThrow();
     expect(linked.project?.name).toBe('Proj');
     expect(linked.views[0]!.scene?.rootUUID).toBe('so');
+  });
+});
+
+describe('projectNameFromManifestJson() — config-first instance identity', () => {
+  test('returns project.name from a well-formed manifest', () => {
+    const raw = JSON.stringify({ registryVersion: 3, project: { name: 'MyLens' }, views: [] });
+    expect(projectNameFromManifestJson(raw)).toBe('MyLens');
+  });
+
+  test('returns null when there is no project block (older v1 manifest)', () => {
+    expect(projectNameFromManifestJson(JSON.stringify({ registryVersion: 1, views: [] }))).toBeNull();
+  });
+
+  test('returns null for a blank / whitespace-only name', () => {
+    expect(projectNameFromManifestJson(JSON.stringify({ project: { name: '   ' } }))).toBeNull();
+    expect(projectNameFromManifestJson(JSON.stringify({ project: { name: '' } }))).toBeNull();
+  });
+
+  test('returns null for a non-string name', () => {
+    expect(projectNameFromManifestJson(JSON.stringify({ project: { name: 42 } }))).toBeNull();
+  });
+
+  test('returns null (never throws) for torn / invalid JSON', () => {
+    expect(projectNameFromManifestJson('{ "project": { "name": "X"')).toBeNull();
+    expect(projectNameFromManifestJson('')).toBeNull();
   });
 });

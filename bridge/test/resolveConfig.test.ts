@@ -20,7 +20,7 @@ describe('resolveConfig() — bearer resolution', () => {
 
 describe('scanForSandbox(bearer)', () => {
   test.todo('returns the lowest port whose marker SO is present');
-  test.todo('returns null when no port in 50000-50100 has the marker');
+  test.todo('returns null when no port in 50000-51000 has the marker');
   test.todo('silently dedupes the LS port pair (N, N+1) to the lower port');
   test.todo('warns when two distinct (non-pair) ports have the marker');
 });

@@ -8,8 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ConnectionState } from '@/lib/bridge-client';
 import type { UseAttachMode } from '@/lib/use-attach-mode';
 import type { TargetSummary } from '@lens-designer/bridge/client';
-import { isElectronHost, requireNative } from '@/lib/native';
-import { getRecentProjects, type RecentProject } from '@/lib/recent-projects';
+import { AttachDialog } from '@/components/AttachDialog';
 
 interface Props {
   /** Underlying WS state from useBridge. */
@@ -49,7 +48,16 @@ export function TargetChip({ state, attach }: Props) {
     // created from the sandbox template still carry the
     // __LENS_DESIGNER_SANDBOX__ marker, and routing them to sandbox mode
     // failed with "no scene object named ActiveComponent".
-    setAttachDialog({ open: true, target: t, assetsDir: '', label: t.projectName ?? '' });
+    //
+    // Prefill the Assets path + name from the scan when the bridge resolved
+    // them (lsof + manifest) — for a configured project this turns Attach into
+    // a one-look confirm instead of a re-Browse.
+    setAttachDialog({
+      open: true,
+      target: t,
+      assetsDir: t.assetsDir ?? '',
+      label: t.projectName ?? '',
+    });
     attach.closePicker();
   }
 
@@ -179,7 +187,15 @@ function PickerDropdown({ picker, activePort, onPick, onClose, onRescan }: Picke
             No Lens Studio instances detected. Make sure LS is open with a project loaded.
           </div>
         )}
-        {picker.instances.map((t) => {
+        {[...picker.instances]
+          .sort((a, b) => {
+            // Elevate configured (already-set-up) projects, else lowest-port-first.
+            const ca = a.configured ? 1 : 0;
+            const cb = b.configured ? 1 : 0;
+            if (ca !== cb) return cb - ca;
+            return a.port - b.port;
+          })
+          .map((t) => {
           const isActive = activePort === t.port;
           return (
             <button
@@ -206,17 +222,22 @@ function PickerDropdown({ picker, activePort, onPick, onClose, onRescan }: Picke
                 }`}
               />
               <span className="flex flex-col min-w-0">
-                <span className="text-[13px] text-text-primary font-medium flex items-center gap-1.5">
-                  {`port ${t.port}`}
+                <span className="text-[13px] text-text-primary font-medium flex items-center gap-1.5 truncate">
+                  {t.projectName ?? `port ${t.port}`}
+                  {t.configured && (
+                    <span className="px-1 py-px text-[9px] font-bold uppercase tracking-wider text-accent-300 bg-accent-500/20 rounded">
+                      Set up
+                    </span>
+                  )}
                   {t.hasMarker && (
                     <span className="px-1 py-px text-[9px] font-bold uppercase tracking-wider text-accent-400 bg-accent-500/15 rounded">
                       Sandbox
                     </span>
                   )}
                 </span>
-                {t.projectName && (
+                {t.assetsDir && (
                   <span className="text-[11px] text-text-tertiary font-num truncate">
-                    {t.projectName}
+                    {t.assetsDir}
                   </span>
                 )}
               </span>
@@ -228,151 +249,6 @@ function PickerDropdown({ picker, activePort, onPick, onClose, onRescan }: Picke
       <div className="px-3.5 py-2.5 border-t border-border-subtle text-[11px] text-text-tertiary">
         No port? Set <code className="font-num text-text-secondary bg-bg-3 px-1 py-px rounded">LS_MCP_PORT</code>{' '}
         manually.
-      </div>
-    </div>
-  );
-}
-
-// ---- Attach dialog (for non-sandbox targets) ----
-
-interface AttachDialogProps {
-  target: TargetSummary;
-  assetsDir: string;
-  name: string;
-  onAssetsDirChange: (v: string) => void;
-  onNameChange: (v: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}
-
-function AttachDialog({ target, assetsDir, name, onAssetsDirChange, onNameChange, onCancel, onConfirm }: AttachDialogProps) {
-  const valid = assetsDir.trim().length > 0 && assetsDir.startsWith('/');
-  const [recents] = useState<RecentProject[]>(() => getRecentProjects());
-  function pickRecent(r: RecentProject) {
-    onAssetsDirChange(r.assetsDir);
-    onNameChange(r.name);
-  }
-
-  async function browse() {
-    // Reuse the native directory picker (Electron host only).
-    if (!isElectronHost()) return;
-    try {
-      const dir = await requireNative().sandbox.chooseDirectory();
-      if (dir) {
-        onAssetsDirChange(dir);
-        // Default the name to the picked folder's parent (the project dir) if
-        // the user hasn't typed one — "…/MyLens/Assets" → "MyLens".
-        if (name.trim().length === 0) {
-          const parts = dir.replace(/\/+$/, '').split('/');
-          const base = parts[parts.length - 1] === 'Assets' ? parts[parts.length - 2] : parts[parts.length - 1];
-          if (base) onNameChange(base);
-        }
-      }
-    } catch {
-      // user cancelled / dialog failed — leave the field as-is
-    }
-  }
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center"
-    >
-      <div className="w-[440px] bg-bg-2 border border-border-default rounded-lg p-5 shadow-2xl">
-        <h2 className="m-0 mb-1 text-base font-semibold text-text-primary">Attach to project</h2>
-        <p className="m-0 mb-4 text-xs text-text-secondary">
-          {target.projectName ? `${target.projectName} · ` : ''}port{' '}
-          <strong className="text-text-primary">{target.port}</strong>
-        </p>
-        {recents.length > 0 && (
-          <div className="flex flex-col gap-1.5 mb-3.5">
-            <span className="text-[11px] font-semibold text-text-secondary">Recent projects</span>
-            <div className="flex flex-col gap-1 max-h-[140px] overflow-auto">
-              {recents.map((r) => (
-                <button
-                  type="button"
-                  key={r.assetsDir}
-                  onClick={() => pickRecent(r)}
-                  title={r.assetsDir}
-                  className={`text-left px-2.5 py-1.5 rounded-md border text-[12px] ${
-                    assetsDir === r.assetsDir
-                      ? 'border-accent-500 bg-accent-500/10'
-                      : 'border-border-subtle hover:bg-bg-3'
-                  }`}
-                >
-                  <span className="block font-medium text-text-primary truncate">{r.name}</span>
-                  <span className="block font-num text-[10.5px] text-text-tertiary truncate">{r.assetsDir}</span>
-                </button>
-              ))}
-            </div>
-            <span className="text-[11px] text-text-tertiary">Pick one to refill the path + name, then Attach.</span>
-          </div>
-        )}
-        <div className="flex flex-col gap-1.5 mb-3.5">
-          <span className="text-[11px] font-semibold text-text-secondary">Name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder={`e.g. ${target.projectName ?? 'wb4-sandbox'}`}
-            spellCheck={false}
-            className="bg-bg-4 border border-border-subtle text-text-primary rounded-md px-2.5 py-2 text-[12.5px] focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 focus:outline-none"
-          />
-          <span className="text-[11px] text-text-tertiary">
-            Shown in the target chip instead of “port {target.port}”.
-          </span>
-        </div>
-        <div className="flex flex-col gap-1.5 mb-3.5">
-          <span className="text-[11px] font-semibold text-text-secondary">Project path</span>
-          <div className="flex gap-1.5">
-            <input
-              type="text"
-              value={assetsDir}
-              onChange={(e) => onAssetsDirChange(e.target.value)}
-              placeholder="/Users/you/Developer/my-lens/Assets"
-              spellCheck={false}
-              autoFocus
-              className="flex-1 min-w-0 bg-bg-4 border border-border-subtle text-text-primary rounded-md px-2.5 py-2 font-num text-[12.5px] focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 focus:outline-none"
-            />
-            {isElectronHost() && (
-              <button
-                type="button"
-                onClick={() => void browse()}
-                className="shrink-0 px-3 py-2 text-xs text-text-secondary border border-border-default rounded-md hover:bg-bg-3 hover:text-text-primary"
-              >
-                Browse…
-              </button>
-            )}
-          </div>
-          <span className="text-[11px] text-text-tertiary">
-            Absolute path to the project's <code className="font-num">Assets/</code> directory.
-            Required for image + font ingest.
-          </span>
-        </div>
-        <div className="flex items-start gap-2 pt-1 pb-3.5">
-          <input type="checkbox" id="pack-on" defaultChecked className="mt-0.5" />
-          <label htmlFor="pack-on" className="text-xs text-text-secondary leading-snug">
-            <strong className="text-text-primary font-semibold">Install the LensDesigner asset pack</strong>{' '}
-            — required for designs to render. Idempotent; skipped if already installed.
-          </label>
-        </div>
-        <div className="flex justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3.5 py-1.5 text-xs text-text-secondary border border-border-default rounded-md hover:bg-bg-3 hover:text-text-primary"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={!valid}
-            className="px-3.5 py-1.5 text-xs text-text-inverse font-semibold rounded-md bg-accent-500 hover:bg-accent-400 disabled:bg-bg-3 disabled:text-text-tertiary"
-          >
-            Attach
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -40,6 +40,28 @@ export function useFontSync({ connected, send, onMessage }: UseFontSyncOptions):
         setSystemFonts(msg.fonts);
       } else if (msg.type === 'fonts.project-list') {
         setProjectFontFiles(msg.files);
+        // Reconcile prior-project fonts: any ingested `font_<hash>.ttf` on disk
+        // that we DON'T already have a customFonts entry for has no recoverable
+        // name locally (fresh browser / another machine / cleared storage).
+        // Ask the bridge to recover it by matching the file's content hash to an
+        // installed system font. Self-limiting: once matched, it lands in
+        // customFonts and won't be re-requested on the next project-list.
+        const known = new Set(
+          useDesignStore.getState().customFonts.map((f) => f.path.split('/').pop()),
+        );
+        const unmatched = msg.files.filter(
+          (f) => /^font_[a-f0-9]+\.(ttf|otf)$/i.test(f) && !known.has(f),
+        );
+        if (unmatched.length > 0) {
+          send({ type: 'fonts.match-project', files: unmatched });
+        }
+      } else if (msg.type === 'fonts.project-matches') {
+        // Bridge recovered these from installed system fonts — add each so it
+        // surfaces in the picker and registers as a canvas FontFace. Dedups by
+        // path inside addCustomFont.
+        for (const m of msg.matches) {
+          addCustomFont({ path: m.path, family: m.family, name: m.name });
+        }
       } else if (msg.type === 'fonts.added') {
         // Register the new font in customFonts. The basename matches
         // what `fonts.list-project` will return — pre-add to
