@@ -1556,6 +1556,29 @@ function measureWidth(s: string, cssFont: string, letterSpacingPx: number): numb
   return ctx.measureText(s).width;
 }
 
+/**
+ * Font line metrics (ascent/descent as a fraction of em) for vertical
+ * placement. Uses the browser's REAL font metrics via measureText so we
+ * reproduce Lens Studio's line-box vertical centering across fonts — including
+ * icon fonts, whose glyphs don't sit on a Latin ~0.8/0.2 ascent/descent split
+ * (an icon like Phosphor's arrow sits entirely above the baseline, so the old
+ * hardcoded 0.8 ascent centered it ~0.14·em too high). fontBoundingBox* is a
+ * font-wide metric — sample-independent and size-independent, so we read the
+ * ratios once at a reference em. Falls back to 0.8/0.2 (SSR / font not yet
+ * loaded). Re-measured per render (cheap); ratios settle once the FontFace loads.
+ */
+const FONT_METRIC_REF_EM = 100;
+function fontLineMetrics(cssFamily: string): { asc: number; desc: number } {
+  const ctx = getMeasureCtx();
+  if (!ctx) return { asc: 0.8, desc: 0.2 };
+  ctx.font = `${FONT_METRIC_REF_EM}px ${cssFamily}`;
+  const m = ctx.measureText('Hg');
+  const asc = m.fontBoundingBoxAscent;
+  const desc = m.fontBoundingBoxDescent;
+  if (!(asc > 0) || !(desc >= 0)) return { asc: 0.8, desc: 0.2 };
+  return { asc: asc / FONT_METRIC_REF_EM, desc: desc / FONT_METRIC_REF_EM };
+}
+
 /** Truncate/ellipsis a single line to fit `maxW`, from front or back. */
 function clipLine(line: string, maxW: number, cssFont: string, ls: number, ellipsis: boolean, front: boolean): string {
   if (measureWidth(line, cssFont, ls) <= maxW) return line;
@@ -1619,6 +1642,12 @@ function layoutText(
   letterSpacingPx: number,
 ): { lines: string[]; fontPx: number } {
   const rawLines = text.split('\n');
+  // LS ignores trailing empty lines when laying text out — a stray trailing
+  // newline (e.g. a value stored as "ft\n") does NOT add a blank line that
+  // shoves middle-aligned text into the top half. Mirror that so such text
+  // centers 1:1 with LS instead of riding high. Keep at least one line, and
+  // only trim the trailing run (interior blank lines are intentional spacing).
+  while (rawLines.length > 1 && rawLines[rawLines.length - 1] === '') rawLines.pop();
   const cssFont = `${fontPx}px ${cssFamily}`;
   let lines: string[];
   switch (hOverflow) {
@@ -1705,7 +1734,12 @@ function TextView({
   const lines = laid.lines;
   const fontPx = laid.fontPx;
   const lineAdvance = fontPx * 1.2 * lineSpacing;
-  const ascent = fontPx * 0.8;
+  // Vertical placement uses the font's REAL line box (measured), so v-align
+  // centers the same box LS does — not an assumed 0.8/0.2 split. This is what
+  // vertically centers icon-font glyphs (and descender-bearing text) 1:1.
+  const fm = fontLineMetrics(cssFamily);
+  const ascentPx = fm.asc * fontPx;
+  const lineBoxPx = (fm.asc + fm.desc) * fontPx;
 
   // Box edges in local SVG coords (y down). Design y-up box top maps to -hPx/2.
   const L = -wPx / 2;
@@ -1714,7 +1748,8 @@ function TextView({
   const B = hPx / 2;
 
   // h-align pins to a box edge; v-align positions the line block in the box.
-  const blockH = (lines.length - 1) * lineAdvance + fontPx;
+  // Block height spans the first line's ascent through the last line's descent.
+  const blockH = (lines.length - 1) * lineAdvance + lineBoxPx;
   const anchorX = hAlign === 'left' ? L : hAlign === 'right' ? R : 0;
   const textAnchor = hAlign === 'left' ? 'start' : hAlign === 'right' ? 'end' : 'middle';
   const blockTopY = vAlign === 'top' ? T : vAlign === 'bottom' ? B - blockH : -blockH / 2;
@@ -1783,7 +1818,7 @@ function TextView({
         style={letterSpacingPx ? { letterSpacing: `${letterSpacingPx}px` } : undefined}
       >
         {lines.map((ln, i) => (
-          <tspan key={i} x={anchorX} y={blockTopY + ascent + i * lineAdvance}>
+          <tspan key={i} x={anchorX} y={blockTopY + ascentPx + i * lineAdvance}>
             {ln === '' ? '​' : ln}
           </tspan>
         ))}
